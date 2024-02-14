@@ -180,7 +180,7 @@ $ task podman_build
 The following output is from a container execution using podman.  The final return code is determined by the return code from ansible-playbook.
 
 ```bash
-$ ./out/ansible-shim-v0.1.0-linux-amd64 -c examples/ansible-shim.yml 
+$ ansible-shim -c examples/ansible-shim.yml 
 2024/02/14 00:15:29 INFO Checking playbook path: ./examples/site.yml
 2024/02/14 00:15:29 INFO Checking inventory path: ./examples/hosts.yml
 2024/02/14 00:15:29 INFO found docker
