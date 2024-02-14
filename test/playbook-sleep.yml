@@ -1,0 +1,15 @@
+---
+
+- name: Playbook for sleeping and testing timeouts
+  hosts: localhost
+  become: false
+  gather_facts: false
+
+  tasks:
+
+    # This task is intended to be used to test the ANSIBLE_PLAYBOOK_TIMEOUT option
+    - name: Pause for 10 seconds using command
+      ansible.builtin.command: sleep 10
+      changed_when: false
+      delegate_to: localhost
+      connection: local

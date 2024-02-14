@@ -1,0 +1,11 @@
+---
+
+- name: Playbook for testing simple Ansible modules
+  hosts: all
+  become: false
+  gather_facts: false
+
+  tasks:
+
+    - name: ping ssh target
+      ansible.builtin.ping:

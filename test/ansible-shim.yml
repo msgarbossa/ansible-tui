@@ -1,0 +1,4 @@
+---
+
+# virtual_env_path: "~/Documents/venv/ansible-latest"
+image: ansible-shim:latest

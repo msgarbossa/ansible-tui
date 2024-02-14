@@ -1,0 +1,6 @@
+out/
+archive/
+examples/hosts2.yml
+.ssh/
+test/salus-report*
+envs.local

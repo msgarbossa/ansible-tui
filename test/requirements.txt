@@ -1,0 +1,7 @@
+
+ansible
+ansible-lint
+yamllint
+testinfra
+flake8
+pylint
