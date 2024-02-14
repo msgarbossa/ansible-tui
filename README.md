@@ -117,7 +117,7 @@ task: Available tasks for this project:
 
 https://go.dev/doc/install
 
-Go 1.22.0 or higher is required due to the use of features introduced in 1.22.0.
+Go 1.22.0 or higher is required due to the use of logging features (slog) introduced in 1.22.0.
 
 The basic setup for go is to download the tar file to /usr/local and unpack to /usr/local/go.
 
