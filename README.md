@@ -49,10 +49,11 @@ All configuration file arguments are initialized to empty-string or 0 based on t
 ```yaml
 ---
 virtual_env_path: "~/Documents/venv/ansible-latest"
+# image: ansible-shim:latest
 ssh_private_key_file: "~/.ssh/id_rsa"
+remote_user: root
 inventory: "./examples/hosts.yml"
 playbook: "./examples/site.yml"
-# image: ansible-shim:latest
 ```
 
 ## Setup
