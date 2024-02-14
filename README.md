@@ -213,3 +213,7 @@ The tests defined in main_test.go pass input parameters via environment variable
 ```bash
 $ task test
 ```
+
+## License
+
+MIT
