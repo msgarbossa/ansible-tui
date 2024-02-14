@@ -10,6 +10,21 @@ See [setup](#setup) instructions below for dependencies and first-time setup.
 
 ansible-shim first looks for a YAML configuration file with the playbook execution parameters.  The path to the YAML configuration file can be specified with either PB_CONFIG_FILE environment variable or with the -c command line option.
 
+### CLI
+
+```bash
+$ ansible-shim -h
+Usage of ansible-shim:
+  -c string
+    	Playbook config file (PB_CONFIG_FILE) (default "./ansible-shim.yml")
+  -version
+    	Display version and exit
+
+$ ansible-shim --version
+Version:	v0.1.0
+Build date:	20240214
+```
+
 ### Parameters
 
 - The final configuration must minimally include the playbook and inventory file.
@@ -79,8 +94,24 @@ https://taskfile.dev/installation/
 
 Download and put the file in the PATH (ex. /usr/local/bin/task).
 
-Ensure it is executable (chmod +x /usr/local/bin/task)
+Ensure it is executable (chmod +x /usr/local/bin/task).
 
+Tasks are defined in Taskfile.yml and can be listed with `task --list`.
+
+```bash
+$ task --list
+task: Available tasks for this project:
+* clean:                Cleanup build and test directories
+* coverage:             Run code coverage test
+* dep:                  Update dependencies
+* docker_build:         Build the container image and cleanup dangling images (docker)
+* fmt:                  Auto-correct lint issues
+* go_build_linux:       Build the go binary for Linux
+* go_sec:               Security scanning of code using Salus, which runs Gosec, GoOSV, and other tools
+* podman_build:         Build the container image and cleanup dangling images (podman)
+* test:                 Run go test
+* vendor:               Vendor go modules in ./vendor directory
+```
 
 ### Go setup
 
@@ -99,6 +130,14 @@ if [ -d "/usr/local/go/bin" ] ; then
     export GOPATH=~/go
     export GOROOT=/usr/local/go
 fi
+```
+
+### Build and install binary
+
+```bash
+$ task go_build_linux
+$ sudo cp ./out/ansible-shim-*-linux-amd64 /usr/local/bin/ansible-shim
+$ sudo chmod 755 /usr/local/bin/ansible-shim
 ```
 
 ### Python virtual environment setup
@@ -126,12 +165,49 @@ When building the image, the default container name and tag are specified in the
 #### Docker
 
 ```bash
-task docker_build
+$ task docker_build
 ```
 
 #### Podman
 
 
 ```bash
-task podman_build
+$ task podman_build
+```
+
+## Example output
+
+The following output is from a container execution using podman.  The final return code is determined by the return code from ansible-playbook.
+
+```bash
+$ ./out/ansible-shim-v0.1.0-linux-amd64 -c examples/ansible-shim.yml 
+2024/02/14 00:15:29 INFO Checking playbook path: ./examples/site.yml
+2024/02/14 00:15:29 INFO Checking inventory path: ./examples/hosts.yml
+2024/02/14 00:15:29 INFO found docker
+2024/02/14 00:15:29 INFO Using podman for container runtime
+2024/02/14 00:15:29 INFO /usr/bin/podman run --rm -u root -e PB_CONFIG_FILE=/app/container-config.yml -v /mnt/shared/home/gopher/Documents/dev/go/ansible-shim:/app:rw,z -v /home/gopher/.ssh/id_rsa:/app/.ssh/ansible-shim:ro,z ansible-shim:latest
+Using /etc/ansible/ansible.cfg as config file
+
+PLAY [Playbook for testing simple Ansible modules] *****************************
+
+TASK [ping ssh target] *********************************************************
+ok: [testhost] => {"ansible_facts": {"discovered_interpreter_python": "/usr/bin/python3"}, "changed": false, "ping": "pong"}
+
+PLAY RECAP *********************************************************************
+testhost                   : ok=1    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+context canceled
+2024/02/14 00:15:46 INFO container finished
+context canceled
+$ echo $?
+0
+```
+
+
+## Testing
+
+The tests defined in main_test.go pass input parameters via environment variables to run a test/playbook-simple.yml against localhost (test/inventory-localhost.txt).
+
+```bash
+$ task test
 ```
