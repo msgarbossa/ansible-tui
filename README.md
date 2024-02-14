@@ -25,6 +25,8 @@ Version:	v0.1.0
 Build date:	20240214
 ```
 
+See [example output](#example-output) below.
+
 ### Parameters
 
 - The final configuration must minimally include the playbook and inventory file.
@@ -92,11 +94,9 @@ For playbook execution (container):
 
 https://taskfile.dev/installation/
 
-Download and put the file in the PATH (ex. /usr/local/bin/task).
-
-Ensure it is executable (chmod +x /usr/local/bin/task).
-
-Tasks are defined in Taskfile.yml and can be listed with `task --list`.
+- Download and put the file in the PATH (ex. /usr/local/bin/task).
+- Ensure it is executable (chmod +x /usr/local/bin/task).
+- Tasks are defined in Taskfile.yml and can be listed with `task --list`.
 
 ```bash
 $ task --list
@@ -117,11 +117,9 @@ task: Available tasks for this project:
 
 https://go.dev/doc/install
 
-Go 1.22.0 or higher is required due to the use of logging features (slog) introduced in 1.22.0.
-
-The basic setup for go is to download the tar file to /usr/local and unpack to /usr/local/go.
-
-Then setup your profile (~/.profile, ~/.bash_profile, ~/.bashrc) to include the following:
+- Go 1.22.0 or higher is required due to the use of logging features (slog) introduced in 1.22.0.
+- The basic setup for go is to download the tar file to /usr/local and unpack to /usr/local/go.
+- Then setup your profile (~/.profile, ~/.bash_profile, ~/.bashrc) to include the following:
 
 ```bash
 # set variables for go if it exists
@@ -130,6 +128,13 @@ if [ -d "/usr/local/go/bin" ] ; then
     export GOPATH=~/go
     export GOROOT=/usr/local/go
 fi
+```
+
+After sourcing the updated profile, verify version of go.
+
+```bash
+$ go version
+go version go1.22.0 linux/amd64
 ```
 
 ### Build and install binary
@@ -154,13 +159,10 @@ pip3 install -r ./test/requirements.txt
 
 ### Container runtime
 
-The included Dockerfile builds a basic Ansible runtime environment and includes ansible-shim.
-
-Docker or Podman can be used to execute ansible inside a container.  If both Docker and Podman are installed, Podman is used.
-
-Docker and Podman use separate image caches.  Docker will not find a local container in the Podman registry and vice-versa.  The image should be pushed to an external registry.
-
-When building the image, the default container name and tag are specified in the `vars` section at the top of Taskfile.yml.
+- The included Dockerfile builds a basic Ansible runtime environment and includes ansible-shim.
+- Docker or Podman can be used to execute ansible inside a container.  If both Docker and Podman are installed, Podman is used.
+- Docker and Podman use separate image caches.  Docker will not find a local container in the Podman registry and vice-versa.  The image should be pushed to an external registry.
+- When building the image, the default container name and tag are specified in the `vars` section at the top of Taskfile.yml.
 
 #### Docker
 
