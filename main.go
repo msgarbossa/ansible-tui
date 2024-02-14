@@ -622,6 +622,9 @@ func (c *PlaybookConfig) runAnsiblePlaybook() (int, error) {
 		os.Setenv("ANSIBLE_REMOTE_USER", c.RemoteUser)
 	}
 
+	// otherwise the color get's lost in Go's tty/command
+	os.Setenv("ANSIBLE_FORCE_COLOR", "True")
+
 	// TODO: Validate c.InventoryFile
 	// err := validateInventory(c.InventoryFile)
 	// if err != nil {

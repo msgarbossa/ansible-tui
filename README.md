@@ -24,7 +24,7 @@ Usage of ansible-shim:
     	Sets log level for ansible-shim to DEBUG (default WARN)
 
 $ ansible-shim --version
-Version:	v0.1.0
+Version:	v0.1.1
 Build date:	20240214
 ```
 
