@@ -142,20 +142,33 @@ func writeFileFromString(outputFilePath string, contents string) error {
 
 func main() {
 
-	slog.SetLogLoggerLevel(slog.LevelDebug)
+	// default log level to LevelWarn (prints WARN and ERROR)
+	slog.SetLogLoggerLevel(slog.LevelWarn)
 
 	// To allow for testing, os.Exit() should only be done from this main() function.
 	// All other functions should return errors (nil when no errors).
 
+	// read and parse CLI options
 	pbConfigFile := ""
 	displayVersion := flag.Bool("version", false, "Display version and exit")
 	flag.StringVar(&pbConfigFile, "c", LookupEnvOrString("PB_CONFIG_FILE", ""), "Playbook config file (PB_CONFIG_FILE)")
+	logLevel1 := flag.Bool("v", false, "Sets log level for ansible-shim to INFO (default WARN)")
+	logLevel2 := flag.Bool("vv", false, "Sets log level for ansible-shim to DEBUG (default WARN)")
 	flag.Parse()
 
+	// display version/build info if -version was passed to CLI
 	if *displayVersion {
 		fmt.Printf("Version:\t%s\n", BuildVersion)
 		fmt.Printf("Build date:\t%s\n", BuildDate)
 		os.Exit(0)
+	}
+
+	// set log level accoring to -v / -vv CLI options
+	if *logLevel1 {
+		slog.SetLogLoggerLevel(slog.LevelInfo)
+	}
+	if *logLevel2 {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}
 
 	// playbook config

@@ -16,9 +16,12 @@ ansible-shim first looks for a YAML configuration file with the playbook executi
 $ ansible-shim -h
 Usage of ansible-shim:
   -c string
-    	Playbook config file (PB_CONFIG_FILE) (default "./ansible-shim.yml")
+    	Playbook config file (PB_CONFIG_FILE)
+  -v	Sets log level for ansible-shim to INFO (default WARN)
   -version
     	Display version and exit
+  -vv
+    	Sets log level for ansible-shim to DEBUG (default WARN)
 
 $ ansible-shim --version
 Version:	v0.1.0
@@ -183,11 +186,6 @@ The following output is from a container execution using podman.  The final retu
 
 ```bash
 $ ansible-shim -c examples/ansible-shim.yml 
-2024/02/14 00:15:29 INFO Checking playbook path: ./examples/site.yml
-2024/02/14 00:15:29 INFO Checking inventory path: ./examples/hosts.yml
-2024/02/14 00:15:29 INFO found docker
-2024/02/14 00:15:29 INFO Using podman for container runtime
-2024/02/14 00:15:29 INFO /usr/bin/podman run --rm -u root -e PB_CONFIG_FILE=/app/container-config.yml -v /mnt/shared/home/gopher/Documents/dev/go/ansible-shim:/app:rw,z -v /home/gopher/.ssh/id_rsa:/app/.ssh/ansible-shim:ro,z ansible-shim:latest
 Using /etc/ansible/ansible.cfg as config file
 
 PLAY [Playbook for testing simple Ansible modules] *****************************
@@ -199,7 +197,6 @@ PLAY RECAP *********************************************************************
 testhost                   : ok=1    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
 
 context canceled
-2024/02/14 00:15:46 INFO container finished
 context canceled
 $ echo $?
 0
