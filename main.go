@@ -161,31 +161,36 @@ func main() {
 	// playbook config
 	pb := PlaybookConfig{}
 
-	// read config file defined by flag or environment variable
+	// read config file defined by flag or environment variable into PlaybookConfig struct
 	err := pb.readConf(pbConfigFile)
 	if err != nil {
 		slog.Error("Exiting due to config file error: %s", err)
 		os.Exit(1)
 	}
 
+	// read environment variables into PlaybookConfig struct
 	err = pb.readEvs()
 	if err != nil {
 		slog.Error("Exiting due error reading environment variables: %s", err)
 		os.Exit(1)
 	}
 
+	// validate inputs in PlaybookConfig struct
 	err = pb.validateInputs()
 	if err != nil {
 		slog.Error("Exiting due valication errors: %s", err)
 		os.Exit(1)
 	}
 
+	// Using PlaybookConfig struct, determine runtime environment (ansible in path, in Python venv, or container).
+	// If container execution, write struct to file, run ansible-shim inside container to read and execute ansible.
 	exitCode, err := pb.runAnsiblePlaybook()
 	if err != nil {
 		slog.Error("Error running playbook: %s", err)
 		os.Exit(1)
 	}
 
+	// Final exit code is based on the results of above runAnsiblePlaybook method call
 	os.Exit(exitCode)
 
 }
