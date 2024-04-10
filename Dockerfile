@@ -14,7 +14,7 @@ RUN apt-get update && apt-get upgrade -y && \
     rm -Rf /usr/share/doc && rm -Rf /usr/share/man && \
     rm -rf /var/tmp* && rm -rf /tmp/*
 
-RUN pip3 install ansible
+RUN pip3 install ansible opentelemetry-api opentelemetry-exporter-otlp opentelemetry-sdk
 
 # These modules are included by default, but can add others:
 # RUN mkdir -pm 755 ${COLLECTION_PATH} && \
@@ -26,7 +26,10 @@ COPY ./out/ansible-shim-*-linux-amd64 /bin/ansible-shim
 RUN mkdir -p /app/.ssh && chmod 750 /app && chmod 700 /app/.ssh && \
     mkdir /etc/ansible && \
     ansible-config init --disabled -t all > /etc/ansible/ansible.cfg && \
-    sed -i 's/^;host_key_checking=True/host_key_checking=False/g' /etc/ansible/ansible.cfg
+    sed -i 's/^;host_key_checking=True/host_key_checking=False/g' /etc/ansible/ansible.cfg && \
+    sed -i 's/^;callbacks_enabled=.*$/callbacks_enabled = community.general.opentelemetry/' /etc/ansible/ansible.cfg && \
+    echo "" >> /etc/ansible/ansible.cfg && echo "[callback_opentelemetry]" >> /etc/ansible/ansible.cfg && \
+    echo "enable_from_environment = ANSIBLE_OPENTELEMETRY_ENABLED" >> /etc/ansible/ansible.cfg
 
 WORKDIR /app
 

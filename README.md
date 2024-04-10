@@ -74,6 +74,7 @@ ssh_private_key_file: "~/.ssh/id_rsa"
 remote_user: root
 inventory: "./examples/hosts.yml"
 playbook: "./examples/site.yml"
+verbose_level: 1
 ```
 
 ## Setup

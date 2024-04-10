@@ -4,8 +4,14 @@
   hosts: localhost
   become: false
   gather_facts: false
+  connection: local
 
   tasks:
+
+    # - name: Collect facts
+    #   ansible.builtin.setup:
+    #     gather_subset:
+    #       - 'all'
 
     # This command is sensitive to Python's subprocess module's communicate method because
     # Ansible's pause access stdin to prompt.
@@ -18,3 +24,11 @@
       ansible.builtin.wait_for:
         timeout: 2
       connection: local
+
+    # This can be used to test lines of output greater than the stdout buffer size
+    # to truncate extremely long lines.
+    # - name: Slurp large file
+    #   ansible.builtin.slurp:
+    #     # src: ../out/ansible-shim-v0.1.1-4-g0c25120-linux-amd64
+    #     src: /app/out/ansible-shim-v0.1.1-4-g0c25120-linux-amd64
+    #   register: slurped
