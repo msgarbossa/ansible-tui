@@ -70,7 +70,7 @@ See [example output](#example-output) below.
 | EXTRA_ARGS | extra_args | Additional options appended to ansible-playbook command (TBD) | NA |
 | WINDOWS_GROUP | windows_group | Group name in Ansible inventory where WinRM should be used with WinRM parameters (TBD) | NA |
 | VIRTUAL_ENV | virtual_env_path | Path to Python virtual environment directory (must contain ./bin/ansible-playbook) | NA |
-| CONTAINER_IMAGE | image | Container image URI with ansible-shim, ansible-playbook, and any other playbook runtime dependencies | NA |
+| CONTAINER_IMAGE | image | Container image URI with ansible-shim, ansible-playbook, and any other playbook runtime dependencies (see [Dockerfile](./Dockerfile))| NA |
 | ANSIBLE_PLAYBOOK_TIMEOUT | NA | Number of seconds to timeout playbook execution | NA |
 |               | execution-type | optional to specify "container" or "venv" in case both image and virtual_env_path are defined | NA |
 
