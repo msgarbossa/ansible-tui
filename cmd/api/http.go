@@ -70,7 +70,9 @@ func handle(
 		}
 	}()
 
+	// TODO: check for err and put on outputChan
 	request.validateInputs()
+	request.processInputs()
 
 	rc, err := request.runAnsiblePlaybook()
 	if err != nil {

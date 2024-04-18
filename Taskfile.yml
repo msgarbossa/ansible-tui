@@ -8,7 +8,8 @@ version: "3"  # Taskfile version, not application version: https://taskfile.dev/
 vars:
     BINARY: ansible-shim
     BUILD_DATE: {sh: date -u +"%Y%m%d"}
-    BUILD_VERSION: {sh: git describe --tags}
+    BUILD_VERSION: {sh: git describe --tags 2>/dev/null || echo v0.0.1}
+    BUILD_VERSION_SHORT: {sh: git describe --tags --abbrev=0 2>/dev/null | cut -c2- || echo v0.0.1}
     LDFLAGS: "-ldflags \"-X main.BuildVersion={{.BUILD_VERSION}} -X main.BuildDate={{.BUILD_DATE}}\""
     OUT: out
     CONTAINER_IMAGE: "{{.BINARY}}"
@@ -31,26 +32,38 @@ tasks:
         desc: Build the container image and cleanup dangling images (docker)
         deps: [clean, go_build_linux]
         cmds:
-            - docker build -t {{.CONTAINER_IMAGE}}:{{.CONTAINER_TAG}} -f Dockerfile .
-            - docker images -f dangling=true
-            - docker images --quiet --filter=dangling=true | xargs docker rmi
+            # Bug in docker will not build if OTEL_EXPORTER_OTLP_ENDPOINT is set:
+            # ERROR: failed to build resolver: passthrough: received empty target in Build()
+            - unset OTEL_EXPORTER_OTLP_ENDPOINT; docker build --no-cache -t {{.CONTAINER_IMAGE}}:{{.CONTAINER_TAG}} -f Dockerfile .
+            # - unset OTEL_EXPORTER_OTLP_ENDPOINT; docker buildx build -t {{.CONTAINER_IMAGE}}:{{.CONTAINER_TAG}} -f Dockerfile .
+            - docker images -f dangling=true  # display any dangling images that will be removed
+            - docker images --quiet --filter=dangling=true | xargs docker rmi 2>/dev/null || exit 0
 
     podman_build:
         desc: Build the container image and cleanup dangling images (podman)
         deps: [clean, go_build_linux]
         cmds:
-            - podman build -t {{.CONTAINER_IMAGE}}:{{.CONTAINER_TAG}} -f Dockerfile .
-            - podman images -f dangling=true
-            - podman images --quiet --filter=dangling=true | xargs podman rmi
+            - podman build --no-cache -t {{.CONTAINER_IMAGE}}:{{.CONTAINER_TAG}} -f Dockerfile .
+            - podman images -f dangling=true # display any dangling images that will be removed
+            - podman images --quiet --filter=dangling=true | xargs podman rmi 2>/dev/null || exit 0
 
     go_build_linux:
-        desc: Build the go binary for Linux
+        desc: Build the go binary for Linux/amd64
         deps: [clean]
         env:
             GOOS: linux
             GOARCH: amd64
         cmds:
-            - GOOS=linux CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build -buildvcs=false {{.LDFLAGS}} -o ./{{.OUT}}/{{.BINARY}}-{{.BUILD_VERSION}}-${GOOS}-${GOARCH} .
+            - CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build -buildvcs=false {{.LDFLAGS}} -o ./{{.OUT}}/{{.BINARY}}-{{.BUILD_VERSION}}-${GOOS}-${GOARCH} ./...
+
+    go_build_darwin:
+        desc: Build the go binary for MacOS/amd64
+        deps: [clean]
+        env:
+            GOOS: darwin
+            GOARCH: amd64
+        cmds:
+            - CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build -buildvcs=false {{.LDFLAGS}} -o ./{{.OUT}}/{{.BINARY}}-{{.BUILD_VERSION}}-${GOOS}-${GOARCH} ./...
 
     dep:
         desc: Update dependencies

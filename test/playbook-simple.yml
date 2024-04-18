@@ -15,20 +15,35 @@
 
     # This command is sensitive to Python's subprocess module's communicate method because
     # Ansible's pause access stdin to prompt.
-    - name: Pause for 2 seconds using pause module
-      ansible.builtin.pause:
-        seconds: 2
+    # - name: Pause for 2 seconds using pause module
+    #   ansible.builtin.pause:
+    #     seconds: 2
 
     # Test sleeping 2 seconds
-    - name: Pause for 2 seconds using wait_for module
-      ansible.builtin.wait_for:
-        timeout: 2
-      connection: local
+    # - name: Pause for 2 seconds using wait_for module
+    #   ansible.builtin.wait_for:
+    #     timeout: 2
+    #   connection: local
+
+    - name: Ansible version
+      ansible.builtin.command:
+        cmd: ansible --version
+      changed_when: false
+
+    - name: Python modules
+      ansible.builtin.shell: |
+        set -o pipefail
+        pip3 list 2>&1 | grep opentel
+        env | grep OTLP
+        exit 0
+      args:
+        executable: /bin/bash
+      changed_when: false
 
     # This can be used to test lines of output greater than the stdout buffer size
     # to truncate extremely long lines.
     # - name: Slurp large file
     #   ansible.builtin.slurp:
-    #     # src: ../out/ansible-shim-v0.1.1-4-g0c25120-linux-amd64
-    #     src: /app/out/ansible-shim-v0.1.1-4-g0c25120-linux-amd64
+    #     src: ../out/ansible-shim-v0.2.0-linux-amd64  # for virtualenv
+    #     #  src: /app/out/ansible-shim-v0.2.0-linux-amd64  # for container image
     #   register: slurped

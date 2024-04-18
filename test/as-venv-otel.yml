@@ -1,0 +1,16 @@
+---
+
+execution-type: venv
+virtual_env_path: "~/Documents/venv/ansible-latest"
+image: localhost/ansible-shim:latest
+playbook: ./test/playbook-simple.yml
+inventory: ./test/inventory-localhost.txt
+verbose_level: 1
+environment-variables:
+  pass:
+    - USER
+  set:
+    ANSIBLE_OPENTELEMETRY_ENABLED: "true"
+    ANSIBLE_OPENTELEMETRY_DISABLE_LOGS: "false"
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4317
+    OTEL_SERVICE_NAME: ansible

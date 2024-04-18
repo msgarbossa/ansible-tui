@@ -57,6 +57,7 @@ See [example output](#example-output) below.
 | VIRTUAL_ENV | virtual_env_path | Path to Python virtual environment directory (must contain ./bin/ansible-playbook) | NA |
 | CONTAINER_IMAGE | image | Container image URI with ansible-shim, ansible-playbook, and any other playbook runtime dependencies | NA |
 | ANSIBLE_PLAYBOOK_TIMEOUT | NA | Number of seconds to timeout playbook execution | NA |
+|               | execution-type | optional to specify "container" or "venv" in case both image and virtual_env_path are defined | NA |
 
 - Only one INVENTORY_ parameter is required
 - Only one EXTA_VARS_ parameter can be specified
@@ -75,6 +76,15 @@ remote_user: root
 inventory: "./examples/hosts.yml"
 playbook: "./examples/site.yml"
 verbose_level: 1
+environment-variables:
+  pass:
+    - ONE
+    - TWO
+    - THREE
+  set:
+    KEY1: VALUE1
+    KEY2: VALUE2
+    KEY3: VALUE3
 ```
 
 ## Setup

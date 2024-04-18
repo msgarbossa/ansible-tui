@@ -7,5 +7,5 @@
 
   tasks:
 
-    - name: ping ssh target
+    - name: Ping ssh target
       ansible.builtin.ping:

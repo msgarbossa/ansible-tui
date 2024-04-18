@@ -1,0 +1,13 @@
+---
+
+execution-type: container
+virtual_env_path: "~/Documents/venv/ansible-latest"
+image: localhost/ansible-shim:latest
+playbook: ./test/playbook-simple.yml
+inventory: ./test/inventory-localhost.txt
+verbose_level: 1
+environment-variables:
+  pass:
+    - USER
+  set:
+    ANSIBLE_OPENTELEMETRY_ENABLED: "false"

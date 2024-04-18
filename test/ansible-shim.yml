@@ -1,5 +1,11 @@
 ---
 
-# virtual_env_path: "~/Documents/venv/ansible-latest"
+execution-type: container
+virtual_env_path: "~/Documents/venv/ansible-latest"
 image: ansible-shim:latest
 verbose_level: 1
+environment-variables:
+  pass:
+    - USER
+  set:
+    ANSIBLE_OPENTELEMETRY_ENABLED: "true"

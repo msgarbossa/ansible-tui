@@ -2,13 +2,17 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -18,27 +22,39 @@ import (
 )
 
 type PlaybookMetrics struct {
-	ExitCode int
-	Error    error
+	ExitCode       int
+	Error          error
+	InventoryCount int
+}
+
+type PlaybookEnvironmentVariables struct {
+	Pass []string          `json:"pass"`
+	Set  map[string]string `json:"set"`
 }
 
 // struct for storing and passing playbook configurations (marshal, unmarshal, methods, function calls)
 type PlaybookConfig struct {
-	Playbook          string `yaml:"playbook" json:"playbook"`
-	VerboseLevel      int    `yaml:"verbose_level" json:"verbose_level"`
-	SshPrivateKeyFile string `yaml:"ssh_private_key_file" json:"ssh_private_key_file"`
-	RemoteUser        string `yaml:"remote_user" json:"remote_user"`
-	InventoryFile     string `yaml:"inventory" json:"inventory"`
-	LimitHost         string `yaml:"limit" json:"limit"`
-	ExtraVarsFile     string `yaml:"extra_vars_file" json:"extra_vars_file"`
-	AnsibleTags       string `yaml:"tags" json:"tags"`
-	AnsibleSkipTags   string `yaml:"skip_tags" json:"skip_tags"`
-	ExtraArgs         string `yaml:"extra_args" json:"extra_args"`
-	WindowsGroup      string `yaml:"windows_group" json:"windows_group"`
-	Image             string `yaml:"image" json:"image"`
-	VirtualEnvPath    string `yaml:"virtual_env_path" json:"virtual_env_path"`
-	Metrics           PlaybookMetrics
+	Playbook             string                       `yaml:"playbook" json:"playbook"`
+	VerboseLevel         int                          `yaml:"verbose_level" json:"verbose_level"`
+	SshPrivateKeyFile    string                       `yaml:"ssh_private_key_file" json:"ssh_private_key_file"`
+	RemoteUser           string                       `yaml:"remote_user" json:"remote_user"`
+	InventoryFile        string                       `yaml:"inventory" json:"inventory"`
+	LimitHost            string                       `yaml:"limit" json:"limit"`
+	ExtraVarsFile        string                       `yaml:"extra_vars_file" json:"extra_vars_file"`
+	AnsibleTags          string                       `yaml:"tags" json:"tags"`
+	AnsibleSkipTags      string                       `yaml:"skip_tags" json:"skip_tags"`
+	ExtraArgs            string                       `yaml:"extra_args" json:"extra_args"`
+	WindowsGroup         string                       `yaml:"windows_group" json:"windows_group"`
+	ExecutionType        string                       `yaml:"execution-type" json:"execution-type"`
+	Image                string                       `yaml:"image" json:"image"`
+	VirtualEnvPath       string                       `yaml:"virtual_env_path" json:"virtual_env_path"`
+	EnvironmentVariables PlaybookEnvironmentVariables `yaml:"environment-variables"`
+	Metrics              PlaybookMetrics
 }
+
+var (
+	tempDirPath = "./.ansible-shim"
+)
 
 func handlePlaybookParams(pbConfigFile string) (int, error) {
 
@@ -49,21 +65,28 @@ func handlePlaybookParams(pbConfigFile string) (int, error) {
 	// read config file defined by flag or environment variable into PlaybookConfig struct
 	err := pb.readConf(pbConfigFile)
 	if err != nil {
-		slog.Error("Exiting due to config file error: %s", err)
+		slog.Error(fmt.Sprintf("Exiting due to config file error: %s", err))
 		return 1, err
 	}
 
 	// read environment variables into PlaybookConfig struct
 	err = pb.readEnvs()
 	if err != nil {
-		slog.Error("Exiting due error reading environment variables: %s", err)
+		slog.Error(fmt.Sprintf("Exiting due error reading environment variables: %s", err))
 		return 1, err
 	}
 
 	// validate inputs in PlaybookConfig struct
 	err = pb.validateInputs()
 	if err != nil {
-		slog.Error("Exiting due validation errors: %s", err)
+		slog.Error(fmt.Sprintf("Exiting due validation errors: %s", err))
+		return 1, err
+	}
+
+	// process values in PlaybookConfig struct
+	err = pb.processInputs()
+	if err != nil {
+		slog.Error(fmt.Sprintf("Exiting due to errors processing inputs: %s", err))
 		return 1, err
 	}
 
@@ -71,7 +94,7 @@ func handlePlaybookParams(pbConfigFile string) (int, error) {
 	// If container execution, write struct to file, run ansible-shim inside container to read and execute ansible.
 	rc, err = pb.runAnsiblePlaybook()
 	if err != nil {
-		slog.Error("Error running playbook: %s", err)
+		slog.Error(fmt.Sprintf("Error running playbook: %s", err))
 		return rc, err
 	}
 
@@ -89,14 +112,14 @@ func (c *PlaybookConfig) readConf(pbConfigFile string) error {
 
 	buf, err := os.ReadFile(pbConfigFile)
 	if err != nil {
-		slog.Error("Error reading config file %s: %s", pbConfigFile, err)
+		slog.Error(fmt.Sprintf("Error reading config file %s: %s", pbConfigFile, err))
 		return err
 	}
 
 	//c := &Config{}
 	err = yaml.Unmarshal(buf, c)
 	if err != nil {
-		slog.Error("Error unmarshalling config file %s: %s", pbConfigFile, err)
+		slog.Error(fmt.Sprintf("Error unmarshalling config file %s: %s", pbConfigFile, err))
 		return err
 	}
 
@@ -106,19 +129,24 @@ func (c *PlaybookConfig) readConf(pbConfigFile string) error {
 // PlaybookConfig method to validate captured inputs from PlaybookConfig struct
 func (c *PlaybookConfig) validateInputs() error {
 
-	if c.VerboseLevel < 0 || c.VerboseLevel > 4 {
-		slog.Warn("VERBOSE_LEVEL must be between 0 and 4, using default (1).")
+	if c.VerboseLevel < 0 || c.VerboseLevel > 7 {
+		slog.Warn("VERBOSE_LEVEL must be between 0 and 7, using default (1).")
 		c.VerboseLevel = 1
 	}
 
-	switch c.VerboseLevel {
-	case 0:
+	switch v := c.VerboseLevel; {
+	case v == 0:
 		slog.SetLogLoggerLevel(slog.LevelWarn)
-	case 1:
+	case v == 1:
 		slog.SetLogLoggerLevel(slog.LevelInfo)
-	case 2, 3, 4:
+	case v > 1:
 		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}
+
+	var (
+		err     error
+		absPath string
+	)
 
 	if c.Playbook == "" {
 		return &InputError{
@@ -126,11 +154,19 @@ func (c *PlaybookConfig) validateInputs() error {
 		}
 	}
 
-	err := sanitizePath(c.Playbook, false)
-	absPath, _ := filepath.Abs(c.Playbook)
-	slog.Info(fmt.Sprintf("Checking playbook path: %s", absPath))
+	slog.Info(fmt.Sprintf("Checking playbook path: %s", c.Playbook))
+	err = sanitizePath(c.Playbook)
 	if err != nil {
-		slog.Error(fmt.Sprintf("Error validating playbook path: %s", absPath))
+		slog.Error(fmt.Sprintf("sanitizing playbook path: %s", c.Playbook))
+		return err
+	}
+	if ok := checkRelativePath(c.Playbook); !ok {
+		return &InputError{
+			Err: errors.New("playbook must have relative path to current directory"),
+		}
+	}
+	if ok, err := pathExists(c.Playbook, false); !ok {
+		slog.Error(fmt.Sprintf("Path for playbook does not exist: %s", c.Playbook))
 		return err
 	}
 
@@ -140,36 +176,83 @@ func (c *PlaybookConfig) validateInputs() error {
 		}
 	}
 
-	err = sanitizePath(c.InventoryFile, false)
-	absPath, _ = filepath.Abs(c.InventoryFile)
-	slog.Info(fmt.Sprintf("Checking inventory path: %s", absPath))
+	slog.Info(fmt.Sprintf("Checking inventory file path: %s", c.InventoryFile))
+	err = sanitizePath(c.InventoryFile)
 	if err != nil {
-		slog.Error(fmt.Sprintf("Error validating inventory path: %s", absPath))
+		slog.Error(fmt.Sprintf("Error sanitizing inventory file path: %s", c.InventoryFile))
+		return err
+	}
+	if ok := checkRelativePath(c.InventoryFile); !ok {
+		return &InputError{
+			Err: errors.New("inventory-file must have relative path to current directory"),
+		}
+	}
+	if ok, err := pathExists(c.InventoryFile, false); !ok {
+		slog.Error(fmt.Sprintf("Inventory path file does not exist: %s", c.InventoryFile))
 		return err
 	}
 
 	if c.ExtraVarsFile != "" {
-		err := sanitizePath(c.ExtraVarsFile, false)
+		slog.Info(fmt.Sprintf("Checking extra-vars file path: %s", c.ExtraVarsFile))
+		err := sanitizePath(c.ExtraVarsFile)
 		if err != nil {
-			absPath, _ = filepath.Abs(c.ExtraVarsFile)
-			slog.Error(fmt.Sprintf("Error validating extra-vars: %s", absPath))
-			slog.Error("Error validating extra-vars")
+			slog.Error(fmt.Sprintf("sanitizing extra-vars path: %s", c.ExtraVarsFile))
+			return err
+		}
+		if ok := checkRelativePath(c.ExtraVarsFile); !ok {
+			return &InputError{
+				Err: errors.New("extra-vars file must have relative path to current directory"),
+			}
+		}
+		if ok, err := pathExists(c.ExtraVarsFile, false); !ok {
+			slog.Error(fmt.Sprintf("Path for extra-vars file does not exist: %s", c.ExtraVarsFile))
 			return err
 		}
 	}
 
 	execTypeCount := 0
 	if c.VirtualEnvPath != "" {
+		slog.Info(fmt.Sprintf("Python virtual environment path: %s", c.VirtualEnvPath))
+		execTypeCount++
+	}
+
+	if c.Image != "" {
+		slog.Info(fmt.Sprintf("image is set to %s", c.Image))
+		execTypeCount++
+	}
+
+	if execTypeCount > 1 {
+		switch e := c.ExecutionType; e {
+		case "container":
+			slog.Warn("Execution type is set to container, unsetting virtual environment")
+			c.VirtualEnvPath = ""
+		case "venv":
+			slog.Warn("Execution type is set to venv, unsetting image")
+			c.Image = ""
+		default:
+			return &InputError{
+				Err: errors.New("python_path and container_image are mutually exclusive (only specify one or set execution-type to container or venv)"),
+			}
+		}
+	}
+
+	if c.VirtualEnvPath != "" {
+		slog.Info(fmt.Sprintf("Checking Python virtual environment path: %s", c.VirtualEnvPath))
 		if strings.HasPrefix(c.VirtualEnvPath, "~") {
 			home := os.Getenv("HOME")
 			c.VirtualEnvPath = strings.Replace(c.VirtualEnvPath, "~", home, 1)
 		}
-		err := sanitizePath(c.VirtualEnvPath, true)
+		err := sanitizePath(c.VirtualEnvPath)
 		if err != nil {
-			slog.Error("Error validating path to virtual environment directory")
+			slog.Error("Error santizing path to virtual environment directory")
 			return err
 		}
-		//c.VirtualEnvPath = filepath.Dir(c.VirtualEnvPath)
+		absPath, _ = filepath.Abs(c.VirtualEnvPath)
+		if ok, err := pathExists(absPath, true); !ok {
+			slog.Error(fmt.Sprintf("Python virtual environment path does not exist: %s", absPath))
+			return err
+		}
+
 		ansiblePlaybookPath := filepath.Join(c.VirtualEnvPath, "bin", "ansible-playbook")
 		if _, err := os.Stat(ansiblePlaybookPath); os.IsNotExist(err) {
 			slog.Error("ansible-playbook is NOT in a Python virtual environment")
@@ -185,28 +268,25 @@ func (c *PlaybookConfig) validateInputs() error {
 		execTypeCount++
 	}
 
-	if c.Image != "" {
-		slog.Info(fmt.Sprintf("image is set to %s", c.Image))
-		execTypeCount++
-	}
-
-	if execTypeCount > 1 {
-		return &InputError{
-			Err: errors.New("python_path and container_image are mutually exclusive (only specify one)"),
-		}
-	}
-
 	if c.SshPrivateKeyFile != "" {
+		slog.Info(fmt.Sprintf("Checking SSH private key path: %s", c.SshPrivateKeyFile))
 		if strings.HasPrefix(c.SshPrivateKeyFile, "~") {
 			home := os.Getenv("HOME")
 			c.SshPrivateKeyFile = strings.Replace(c.SshPrivateKeyFile, "~", home, 1)
 		}
-		err := sanitizePath(c.SshPrivateKeyFile, false)
+		err := sanitizePath(c.SshPrivateKeyFile)
 		if err != nil {
 			absPath, _ = filepath.Abs(c.SshPrivateKeyFile)
-			slog.Error(fmt.Sprintf("Error validating path to SSH private key: %s", absPath))
+			slog.Error(fmt.Sprintf("Error sanitizing path to SSH private key: %s", absPath))
 			return err
 		}
+		absPath, _ = filepath.Abs(c.SshPrivateKeyFile)
+		if ok, err := pathExists(absPath, false); !ok {
+			slog.Error(fmt.Sprintf("SSH private key file path does not exist: %s", absPath))
+			return err
+		}
+		// when container execution, the absoluate path is used to mount to a specific container path
+		c.SshPrivateKeyFile = absPath
 	}
 
 	// TODO: To enforce /etc/ansible/ansible.cfg in container image, disallow (and log warning) for any of these:
@@ -217,8 +297,71 @@ func (c *PlaybookConfig) validateInputs() error {
 	return nil
 }
 
+func (c *PlaybookConfig) processInputs() error {
+
+	// This function manipulates environment variables.
+	// It should be run after all inputs (envs and config files) are evaluated
+	// and the final PlaybookConfig struct is set.
+	// It should be run before any os/exec commands are run for containers
+	// or running ansible.
+
+	envPass := make(map[string]string)
+	envKeyIdx := make(map[string]bool)
+
+	// These env keys are required for a default shell and should not be unset
+	autoPassEnvs := make(map[string]bool)
+	autoPassEnvs["PATH"] = true
+
+	// Pass through environment variables listed under environment-variables.pass
+	// Capture values to be able to pass into container.
+	for _, k := range c.EnvironmentVariables.Pass {
+		if v := os.Getenv(k); v != "" {
+			slog.Debug(fmt.Sprintf("Caching pass through env %s", k))
+			envPass[k] = v // save to map before setting later
+		} else {
+			slog.Warn(fmt.Sprintf("Pass through env not found: %s", k))
+		}
+	}
+
+	// set anything in environment-variables.set
+	for k, v := range c.EnvironmentVariables.Set {
+		_, ok := envPass[k]
+		if ok {
+			slog.Warn(fmt.Sprintf("Set env also exists in pass, overriding with set value: %s", k))
+			delete(envPass, k)
+		}
+		slog.Debug(fmt.Sprintf("Set env %s = %s", k, v))
+		os.Setenv(k, v)
+		envKeyIdx[k] = true
+	}
+
+	// set any pass through variables that were not overidden by a set variable
+	for k, v := range envPass {
+		slog.Debug(fmt.Sprintf("Passing through env %s", k))
+		c.EnvironmentVariables.Set[k] = v
+		envKeyIdx[k] = true
+	}
+
+	// delete all other environment variables
+	for _, e := range os.Environ() {
+		pair := strings.SplitN(e, "=", 2)
+		if _, ok1 := envKeyIdx[pair[0]]; !ok1 {
+			if _, ok2 := autoPassEnvs[pair[0]]; !ok2 {
+				slog.Debug(fmt.Sprintf("Unsetting unspecified env: %s", pair[0]))
+				os.Unsetenv(pair[0])
+			}
+		}
+	}
+
+	return nil
+}
+
 // PlaybookConfig method to read environment variables into PlaybookConfig struct
 func (c *PlaybookConfig) readEnvs() error {
+
+	var (
+		err error
+	)
 
 	playbook := os.Getenv("PLAYBOOK")
 	if playbook != "" {
@@ -233,6 +376,7 @@ func (c *PlaybookConfig) readEnvs() error {
 			verboseLevelInt = 1
 		}
 		c.VerboseLevel = verboseLevelInt
+		// TODO: should probably evaluate this right away in a separate function
 	}
 
 	sshPrivateKeyFile := os.Getenv("SSH_PRIVATE_KEY_FILE")
@@ -243,6 +387,19 @@ func (c *PlaybookConfig) readEnvs() error {
 	remoteUser := os.Getenv("ANSIBLE_REMOTE_USER")
 	if remoteUser != "" {
 		c.RemoteUser = remoteUser
+	}
+
+	// create temp-dir if it does not exist
+	cwd, _ := os.Getwd()
+	p := filepath.Join(cwd, tempDirPath)
+	ok, _ := pathExists(p, true)
+	if !ok {
+		slog.Debug(fmt.Sprintf("Creating temp-dir: %s", p))
+		err = ensureDir(p)
+		if err != nil {
+			slog.Error(fmt.Sprintf("Error creating temp-dir path: %s", p))
+			return err
+		}
 	}
 
 	inventoryFile := os.Getenv("INVENTORY_FILE")
@@ -347,6 +504,181 @@ func (c *PlaybookConfig) readEnvs() error {
 	return nil
 }
 
+func readLine(reader *bufio.Reader) (strLine string, err error) {
+	buffer := new(bytes.Buffer)
+	for {
+		var line []byte
+		var isPrefix bool
+		// Start reading line
+		line, isPrefix, err = reader.ReadLine()
+
+		// slog.Debug(fmt.Sprintf("Read Len: %d, isPrefix: %t, Error: %v\n", len(line), isPrefix, err))
+
+		if err != nil && err != io.EOF {
+			return "", err
+		}
+
+		buffer.Write(line)
+
+		if !isPrefix {
+			// EOL found
+			break
+		}
+	}
+
+	// EOL, return string
+	return buffer.String(), err
+}
+
+func (c *PlaybookConfig) validateAnsibleInventory() error {
+
+	// One challenge here is that ansible-inventory returns a zero return code even when the
+	// inventory has errors preventing it from parsing.  Therefore, stderr needs to be parsed
+	// for a warning message.
+
+	ansibleInvCmdPath := "ansible-inventory"
+	rc := 0
+
+	if c.VirtualEnvPath != "" {
+		os.Setenv("PATH", c.VirtualEnvPath+"/bin:"+os.Getenv("PATH"))
+		slog.Debug("Using virtualenv for " + ansibleInvCmdPath)
+	}
+
+	path, err := exec.LookPath(ansibleInvCmdPath)
+	if err != nil {
+		slog.Warn(fmt.Sprintf("%s lookup err: %s", ansibleInvCmdPath, err))
+		slog.Info(os.Getenv("PATH"))
+		return err
+	} else {
+		slog.Info(fmt.Sprintf("%s lookup path: %s", ansibleInvCmdPath, path))
+	}
+
+	var ansibleInventoryArgs []string
+
+	ansibleInventoryArgs = append(ansibleInventoryArgs, "-i", c.InventoryFile, "--graph")
+
+	cmd := exec.Command(ansibleInvCmdPath, ansibleInventoryArgs...)
+
+	slog.Info(cmd.String())
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		slog.Error(fmt.Sprintf("Could not get stderr pipe: %v", err))
+		return err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		slog.Error(fmt.Sprintf("Could not get stdout pipe: %v", err))
+		return err
+	}
+
+	if err := cmd.Start(); err != nil {
+		slog.Error(fmt.Sprintf("cmd.Start: %s", err))
+		return err
+	}
+
+	// To get the inventory count, filter out groups ("@") and look for
+	// |--<ansible_host>
+	// Store ansible_host in a map to deduplicate, then count map keys.
+
+	var (
+		regExpAmp        = regexp.MustCompile(`@`)
+		regExpItem       = regexp.MustCompile(`^.*|--(.*)`)
+		regExpParseError = regexp.MustCompile(`: Unable to parse`)
+		ansibleHosts     = make(map[string]bool)
+	)
+
+	defer cmd.Wait()
+
+	go func() {
+
+		reader := bufio.NewReader(stderr)
+		for {
+			strline, err := readLine(reader)
+			if err != nil && err != io.EOF {
+				log.Fatal(err)
+			}
+
+			// Look for ": Unable to parse"
+			m := regExpParseError.FindString(strline)
+			if m != "" {
+				slog.Error("Parse error detected, setting return code = 1.  Set")
+				if c.VerboseLevel < 3 {
+					slog.Info("Set verbose-level >= 3 to see ansible-inventory error message.")
+				}
+				rc = 1
+			}
+
+			slog.Debug(strline)
+			// fmt.Println(strline)
+
+			if err == io.EOF {
+				slog.Debug("EOF.  Done reading buffered stderr for ansible-inventory")
+				break
+			}
+		}
+	}()
+
+	go func() {
+
+		reader := bufio.NewReader(stdout)
+		for {
+			strline, err := readLine(reader)
+			if err != nil && err != io.EOF {
+				log.Fatal(err)
+			}
+
+			// skip lines with "@"
+			m := regExpAmp.FindString(strline)
+			if m != "" {
+				continue
+			}
+
+			m = regExpItem.FindString(strline)
+			if m != "" {
+				ansibleHosts[m] = true
+			}
+			// slog.Debug(strline)
+			// fmt.Println(strline)
+
+			if err == io.EOF {
+				slog.Debug("EOF.  Done reading buffered stdout for ansible-inventory")
+				break
+			}
+		}
+		c.Metrics.InventoryCount = len(ansibleHosts)
+		slog.Info(fmt.Sprintf("inventory count: %d", c.Metrics.InventoryCount))
+	}()
+
+	pid := cmd.Process.Pid
+	slog.Info(fmt.Sprintf("PID for %s command: %d", ansibleInvCmdPath, pid))
+
+	// err = cmd.Wait()
+	// rc = cmd.ProcessState.ExitCode()
+
+	if err := cmd.Wait(); err != nil {
+		if exiterr, ok := err.(*exec.ExitError); ok {
+			slog.Info(fmt.Sprintf("Exit Status: %d", exiterr.ExitCode()))
+			rc = exiterr.ExitCode()
+		} else {
+			slog.Error(fmt.Sprintf("cmd.Wait: %v", err))
+			// rc = exiterr.ExitCode()
+			rc = 1
+		}
+		slog.Error(fmt.Sprintf("cmd.Wait rc: %d", rc))
+	}
+
+	slog.Info(fmt.Sprintf("%s finished: rc=%d", ansibleInvCmdPath, rc))
+
+	if rc != 0 {
+		return &InputError{
+			Err: errors.New("inventory is not valid"),
+		}
+	}
+	return nil
+
+}
+
 func executePlaybookInContainer(c PlaybookConfig) (int, error) {
 
 	slog.Debug("Starting executePlaybookInContainer()")
@@ -387,7 +719,7 @@ func executePlaybookInContainer(c PlaybookConfig) (int, error) {
 			return 1, err
 		}
 		// set volume mount to normalized location in container and append to command
-		volMount2 := c.SshPrivateKeyFile + ":" + "/app/.ssh/ansible-shim:ro,z"
+		volMount2 := c.SshPrivateKeyFile + ":" + "/app/.ssh/ansible-shim:ro" // using mount option -z/-Z causes lsetxattr error
 		containerArgs = append(containerArgs, "-v", volMount2)
 
 		// modify SSH private key path to location used inside the container
@@ -445,31 +777,39 @@ func executePlaybookInContainer(c PlaybookConfig) (int, error) {
 	cmd := exec.CommandContext(ctx, containerCmd, containerArgs...)
 
 	slog.Info(cmd.String())
+	cmd.Stderr = os.Stdout
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		slog.Error(fmt.Sprintf("cmd.StdoutPipe: %s", err))
 		return 1, err
-		//panic(err)
 	}
-	scanner := bufio.NewScanner(stdout)
-	err = cmd.Start()
+	slog.Info("Starting container execution")
+	if err := cmd.Start(); err != nil {
+		slog.Error(fmt.Sprintf("cmd.Start: %s", err))
+		return 1, err
+	}
+
+	defer cmd.Wait()
+
+	go func() {
+		reader := bufio.NewReader(stdout)
+		for {
+			strline, err := readLine(reader)
+			if err != nil && err != io.EOF {
+				log.Fatal(err)
+			}
+
+			fmt.Println(strline)
+
+			if err == io.EOF {
+				slog.Debug("EOF.  Done reading buffered output in container")
+				break
+			}
+		}
+	}()
+
 	pid := cmd.Process.Pid
-	slog.Info(fmt.Sprintf("PID for container run command: %d", pid))
-	if err != nil {
-		slog.Error("cmd.Start() failed")
-		return 1, err
-	}
-	for scanner.Scan() {
-		line := scanner.Text()
-		// slog.Info(line)
-		fmt.Println(line)
-	}
-	if scanner.Err() != nil {
-		cmd.Process.Kill()
-		cmd.Wait()
-		// panic(scanner.Err())
-		slog.Error("scanner error")
-		return 1, scanner.Err()
-	}
+	slog.Info(fmt.Sprintf("PID for container command: %d", pid))
 
 	rc := 0
 	if err := cmd.Wait(); err != nil {
@@ -499,7 +839,7 @@ func (c *PlaybookConfig) runAnsiblePlaybook() (int, error) {
 
 	slog.Debug("Starting runAnsiblePlaybook()")
 
-	PrintMemUsage()
+	// PrintMemUsage()
 
 	rc := 0
 
@@ -517,13 +857,13 @@ func (c *PlaybookConfig) runAnsiblePlaybook() (int, error) {
 		slog.Info("Using virtualenv for " + ansibleCmdPath)
 	}
 
-	path, err := exec.LookPath("ansible-playbook")
+	path, err := exec.LookPath(ansibleCmdPath)
 	if err != nil {
-		slog.Warn(fmt.Sprintf("ansible-playbook lookup err: %s", err))
+		slog.Warn(fmt.Sprintf("%s lookup err: %s", ansibleCmdPath, err))
 		slog.Info(os.Getenv("PATH"))
 		return 1, err
 	} else {
-		slog.Info(fmt.Sprintf("ansible-playbook lookup path: %s", path))
+		slog.Info(fmt.Sprintf("%s lookup path: %s", ansibleCmdPath, path))
 	}
 
 	var ansiblePlaybookArgs []string
@@ -552,12 +892,11 @@ func (c *PlaybookConfig) runAnsiblePlaybook() (int, error) {
 	// otherwise the color get's lost in Go's tty/command
 	os.Setenv("ANSIBLE_FORCE_COLOR", "True")
 
-	// TODO: Validate c.InventoryFile
-	// err := validateInventory(c.InventoryFile)
-	// if err != nil {
-	// 	slog.Error("Exiting due to inventory file validation error: %s", err)
-	// 	return err
-	// }
+	err = c.validateAnsibleInventory()
+	if err != nil {
+		slog.Error(fmt.Sprintf("Exiting due to inventory file validation error: %s", err))
+		return 1, err
+	}
 
 	ansiblePlaybookArgs = append(ansiblePlaybookArgs, "-i", c.InventoryFile, c.Playbook)
 
@@ -599,69 +938,36 @@ func (c *PlaybookConfig) runAnsiblePlaybook() (int, error) {
 	cmd.Stderr = os.Stdout
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		slog.Error(fmt.Sprintf("cmd.StdoutPipe: %s", err))
 		return 1, err
-		//panic(err)
+	}
+	slog.Info("Starting playbook execution")
+	if err := cmd.Start(); err != nil {
+		slog.Error(fmt.Sprintf("cmd.Start: %s", err))
+		return 1, err
 	}
 
-	slog.Debug("starting playbook execution")
-	err = cmd.Start()
+	defer cmd.Wait()
+
+	go func() {
+		reader := bufio.NewReader(stdout)
+		for {
+			strline, err := readLine(reader)
+			if err != nil && err != io.EOF {
+				log.Fatal(err)
+			}
+
+			fmt.Println(strline)
+
+			if err == io.EOF {
+				slog.Debug("EOF.  Done reading buffered output for ansible-playbook")
+				break
+			}
+		}
+	}()
+
 	pid := cmd.Process.Pid
 	slog.Info(fmt.Sprintf("PID for ansible-playbook command: %d", pid))
-	if err != nil {
-		slog.Error("cmd.Start() failed")
-		return 1, err
-	}
-
-	r := bufio.NewReader(stdout)
-
-	truncating := false
-	for {
-		line_b, isPrefix, err := r.ReadLine()
-		line := string(line_b)
-		if isPrefix && truncating {
-			continue
-		}
-		truncating = false
-		if isPrefix && !truncating {
-			line = line + " [TRUNCATED]"
-			truncating = true
-		}
-		if err != nil {
-			slog.Error(fmt.Sprintf("ReadLine error: %s", err))
-			break
-		}
-
-		fmt.Println(line)
-	}
-
-	// scanner := bufio.NewScanner(stdout)
-	// buf := make([]byte, 0, 64*1024)
-	// scanner.Buffer(buf, 1024*1024)
-
-	// for scanner.Scan() {
-	// 	line := scanner.Text()
-	// 	// Handle each line of output
-	// 	fmt.Println(line)
-	// 	// slog.Info(line)
-	// }
-	// if err := scanner.Err(); err != nil {
-	// 	// process the error
-	// 	slog.Error(fmt.Sprintf("scanner error: %s", err))
-	// 	cmd.Process.Kill()
-	// 	cmd.Wait()
-	// 	// scanner.Err() == bufio.ErrTooLong
-	// 	// panic(scanner.Err())
-	// 	return 1, scanner.Err()
-	// }
-
-	// if scanner.Err() != nil {
-	// 	cmd.Process.Kill()
-	// 	cmd.Wait()
-	// 	// scanner.Err() == bufio.ErrTooLong
-	// 	slog.Error("scanner error")
-	// 	// panic(scanner.Err())
-	// 	return 1, scanner.Err()
-	// }
 
 	if err := cmd.Wait(); err != nil {
 		if exiterr, ok := err.(*exec.ExitError); ok {
@@ -674,7 +980,7 @@ func (c *PlaybookConfig) runAnsiblePlaybook() (int, error) {
 		}
 	}
 
-	PrintMemUsage()
+	// PrintMemUsage()
 
 	slog.Info(fmt.Sprintf("ansible-playbook finished: rc=%d", rc))
 	return rc, err

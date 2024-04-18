@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.5
 FROM ubuntu:22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -14,7 +15,7 @@ RUN apt-get update && apt-get upgrade -y && \
     rm -Rf /usr/share/doc && rm -Rf /usr/share/man && \
     rm -rf /var/tmp* && rm -rf /tmp/*
 
-RUN pip3 install ansible opentelemetry-api opentelemetry-exporter-otlp opentelemetry-sdk
+RUN pip3 install --no-cache-dir ansible opentelemetry-api opentelemetry-exporter-otlp opentelemetry-sdk
 
 # These modules are included by default, but can add others:
 # RUN mkdir -pm 755 ${COLLECTION_PATH} && \
