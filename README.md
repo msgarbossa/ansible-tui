@@ -4,6 +4,21 @@
 
 ansible-shim is a lightweight CLI wrapper written in Go for running ansible-playbook.  ansible-shim provides both an environment-variable and YAML based API to enable ansible-playbook to be run by other tools and services.
 
+## How it works
+
+```mermaid
+flowchart TD
+    A(main.go) -->|parse basic options| B(Read Config)
+    B --> C(Read Envs)
+    C --> D(Validate Inputs)
+    D --> E(Process Inputs)
+    E --> F{Container?}
+    F --> |yes| G(Write full config file)
+    F --> |no| H(Execute ansible-playbook)
+    G --> I(Run container w/ ansible-shim against config)
+    I --> A
+```  
+
 ## Usage
 
 See [setup](#setup) instructions below for dependencies and first-time setup.
