@@ -1,7 +1,7 @@
 {
-    "ssh_private_key_file": "~/.ssh/id_rsa",
+    "ssh-private-key-file": "~/.ssh/id_rsa",
     "inventory": "./test/inventory-localhost.txt",
     "playbook": "./test/playbook-simple.yml",
-    "verbose_level": 1,
+    "verbose-level": 1,
     "image": "ansible-shim:latest"
 }

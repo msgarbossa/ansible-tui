@@ -1,13 +1,20 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
+	"time"
 )
 
 // global variables
@@ -114,4 +121,100 @@ func writeFileFromString(outputFilePath string, contents string) error {
 	}
 
 	return nil
+}
+
+// PrintMemUsage outputs the current, total and OS memory being used. As well as the number
+// of garbage collection cycles completed.
+func PrintMemUsage() {
+
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
+	fmt.Printf("Alloc = %v MiB", bToMb(m.Alloc))
+	fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
+	fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
+	fmt.Printf("\tNumGC = %v\n", m.NumGC)
+}
+
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
+}
+
+func runBufferedCommandWithoutCapture(command string, cmdArgs []string, timeoutSeconds int) (int, error) {
+
+	ctx, cancel := context.WithCancel(context.Background())
+	if timeoutSeconds > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
+	}
+
+	defer func() {
+		for {
+			select {
+			case <-ctx.Done():
+				// fmt.Println(ctx.Err())
+				// slog.Error(fmt.Sprintf("command context: %s", ctx.Err()))
+				return
+			default:
+				//fmt.Println("finished")
+				// slog.Info("command context finished")
+				cancel()
+			}
+		}
+	}()
+
+	slog.Debug(fmt.Sprintf("%s %s", command, cmdArgs))
+
+	cmd := exec.CommandContext(ctx, command, cmdArgs...)
+
+	slog.Info(cmd.String())
+	cmd.Stderr = os.Stdout
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		slog.Error(fmt.Sprintf("cmd.StdoutPipe: %s", err))
+		return 1, err
+	}
+	slog.Info("Starting command execution")
+	if err := cmd.Start(); err != nil {
+		slog.Error(fmt.Sprintf("cmd.Start: %s", err))
+		return 1, err
+	}
+
+	defer cmd.Wait()
+
+	go func() {
+		reader := bufio.NewReader(stdout)
+		for {
+			strline, err := readLine(reader)
+			if err != nil && err != io.EOF {
+				log.Fatal(err)
+			}
+
+			fmt.Println(strline)
+
+			if err == io.EOF {
+				slog.Debug(fmt.Sprintf("EOF.  Done reading buffered output from command: %s", command))
+				break
+			}
+		}
+	}()
+
+	rc := 0
+	pid := cmd.Process.Pid
+	slog.Info(fmt.Sprintf("PID for command %s: %d", command, pid))
+	if err := cmd.Wait(); err != nil {
+		slog.Warn(fmt.Sprintf("Command wait error to get return code not nil: %s", err))
+		if exiterr, ok := err.(*exec.ExitError); ok {
+			slog.Info(fmt.Sprintf("Exit Status: %d", exiterr.ExitCode()))
+			rc = exiterr.ExitCode()
+		} else {
+			slog.Error(fmt.Sprintf("cmd.Wait: %v", err))
+			// rc = exiterr.ExitCode()
+			rc = 1
+		}
+	}
+
+	// PrintMemUsage()
+
+	slog.Info(fmt.Sprintf("command finished: cmd= %s, rc=%d", command, rc))
+	return rc, err
 }

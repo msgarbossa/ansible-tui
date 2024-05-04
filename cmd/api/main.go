@@ -35,13 +35,13 @@ func (m *ExecutionError) Error() string {
 func generateTemplateFile() {
 
 	contents := `---
-# virtual_env_path: "~/Documents/venv/ansible-latest
+# virtual-env-path: "~/Documents/venv/ansible-latest
 image: ansible-shim:latest
-ssh_private_key_file: "~/.ssh/id_rsa"
-remote_user: root
+ssh-private-key-file: "~/.ssh/id_rsa"
+remote-user: root
 inventory: "./examples/hosts.yml"
 playbook: "./examples/site.yml"
-verbose_level: 1`
+verbose-level: 1`
 
 	writeFileFromString("./ansible-shim.yml", contents)
 }

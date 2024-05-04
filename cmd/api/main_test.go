@@ -120,9 +120,14 @@ func TestInvalidInventory(t *testing.T) {
 
 func TestSimplePlaybookVenv(t *testing.T) {
 
-	os.Setenv("INVENTORY_FILE", "./test/inventory-localhost.txt")
+	os.Setenv("PB_CONFIG_FILE", "./test/as-venv.yml")
 
-	err := pb.readEnvs()
+	err := pb.readConf(os.Getenv("PB_CONFIG_FILE"))
+	if err != nil {
+		t.Errorf("Expected no errors reading config file, got %s", err)
+	}
+
+	err = pb.readEnvs()
 	if err != nil {
 		t.Errorf("Expected no errors reading environment variables, got %s", err)
 	}
@@ -150,6 +155,41 @@ func TestSimplePlaybookVenv(t *testing.T) {
 func TestSimplePlaybookContainer(t *testing.T) {
 
 	os.Setenv("PB_CONFIG_FILE", "./test/as-container.yml")
+
+	err := pb.readConf(os.Getenv("PB_CONFIG_FILE"))
+	if err != nil {
+		t.Errorf("Expected no errors reading config file, got %s", err)
+	}
+
+	err = pb.readEnvs()
+	if err != nil {
+		t.Errorf("Expected no errors reading environment variables, got %s", err)
+	}
+
+	err = pb.validateInputs()
+	if err != nil {
+		t.Errorf("Expected no errors validating inputs, got %s", err)
+	}
+
+	err = pb.processInputs()
+	if err != nil {
+		t.Errorf("Expected no errors processing inputs, got %s", err)
+	}
+
+	rc, err := pb.runAnsiblePlaybook()
+	if err != nil {
+		t.Errorf("Expected no errors running playbook, got %s", err)
+	}
+	if rc != 0 {
+		t.Errorf("Expected exit code 0 running playbook, got %d", rc)
+	}
+
+}
+
+func TestAnsibleVaultVenv(t *testing.T) {
+
+	os.Setenv("PB_CONFIG_FILE", "./test/as-venv-vault.yml")
+	os.Setenv("ANSIBLE_VAULT_PASSWORD_FILE", "./test/vault-pw.txt")
 
 	err := pb.readConf(os.Getenv("PB_CONFIG_FILE"))
 	if err != nil {

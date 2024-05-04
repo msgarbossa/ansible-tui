@@ -1,10 +1,11 @@
 ---
 
-execution-type: container
+execution-type: venv
 virtual-env-path: "~/Documents/venv/ansible-latest"
 image: localhost/ansible-shim:latest
 playbook: ./test/playbook-simple.yml
 inventory: ./test/inventory-localhost.txt
+extra-args: --check
 verbose-level: 1
 environment-variables:
   pass:

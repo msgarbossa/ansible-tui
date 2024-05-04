@@ -1,0 +1,22 @@
+---
+
+- name: Playbook for testing ansible-vault
+  hosts: localhost
+  become: false
+  gather_facts: false
+  connection: local
+
+  tasks:
+
+    - name: Debug value from ansible-vault
+      vars:
+        testvar: !vault |
+            $ANSIBLE_VAULT;1.1;AES256
+            36353437613837303638663832303166666337613436386365333964393030353435616366366534
+            6130306637386437363533616332643730303833326636620a386162303338633662636230343834
+            38336335383062386636396364393739366133623039316131373734643537303630383566666538
+            6162306661643336320a396663356265633632363361363930643964336236653564623835666636
+            3330
+      ansible.builtin.debug:
+        var: testvar
+      changed_when: false

@@ -13,10 +13,12 @@ flowchart TD
     C --> D(Validate Inputs)
     D --> E(Process Inputs)
     E --> F{Container?}
-    F --> |yes| G(Write full config file)
-    F --> |no| H(Execute ansible-playbook)
-    G --> I(Run container w/ ansible-shim against config)
+    F --> |no| G(Find path to ansible)
+    F --> |yes| H(Write full config file)
+    H --> I(Run container w/ ansible-shim against config)
     I --> A
+    G --> J(Validate Ansible inventory)
+    J --> K(Run ansible-playbook)
 ```  
 
 ## Usage
@@ -50,29 +52,29 @@ See [example output](#example-output) below.
 - The final configuration must minimally include the playbook and inventory file.
 - Environment variables have higher precedence and can override parameters in the YAML configuration file.
 - ENV Parameters are all environment variables and therefore strings.
-- YAML parameters are all strings unless otherwise noted (verbose_level).
+- YAML parameters are all strings unless otherwise noted (verbose-level).
 
 | ENV Parameter | YAML Parameter | Purpose | ansible-playbook CLI option |
 | ------------- | -------------- | ------- | --------------------------- |
 | PB_CONFIG_FILE | NA | Relative path to YAML configuration which is read before environment variables are processed (can also be passed to ansible-shim with -c) | NA |
 | PLAYBOOK | playbook | Relative path to the playbook to execute | NA |
-| VERBOSE_LEVEL | verbose_level (int) | String containing 0-4, corresponding the number of v's controlling the level of verbosity | -v, -vv, -vvv, -vvvv |
-| SSH_PRIVATE_KEY_FILE | ssh_private_key_file | Path to SSH private key (for SSH connections only) | NA |
-| ANSIBLE_REMOTE_USER | remote_user | Remote user for target machine | NA |
+| VERBOSE_LEVEL | verbose-level (int) | String containing 0-4, corresponding the number of v's controlling the level of verbosity | -v, -vv, -vvv, -vvvv |
+| SSH_PRIVATE_KEY_FILE | ssh-private-key-file | Path to SSH private key (for SSH connections only) | NA |
+| ANSIBLE_REMOTE_USER | remote-user | Remote user for target machine | NA |
 | INVENTORY_FILE | inventory | Absolute or relative path to inventory file (no backward traversal w/ "..") | -i |
 | INVENTORY_CONTENTS | NA | Multi-line string containing inventory contents.  Contents are written to a file and passed via -i ./hosts-INVENTORY | NA |
 | INVENTORY_URL | NA | Retrieves a single Ansible inventory file from a URL to be used as INVENTORY_FILE | NA |
 | LIMIT_HOST | limit | Limit targets hosts to a host or group name or pattern resolved in Ansible inventory | --limit |
-| EXTRA_VARS_FILE | extra_vars_file | Absolute or relative path to extra-vars file (no backward traversal w/ "..") | -e --extra-vars |
+| EXTRA_VARS_FILE | extra-vars-file | Absolute or relative path to extra-vars file (no backward traversal w/ "..") | -e --extra-vars |
 | EXTRA_VARS_CONTENTS | NA | Multi-line string containing extra-vars contents.  Contents are written to a file and passed via -e ./PLAYBOOK-extravars | NA |
 | ANSIBLE_TAGS | tags | Run Ansible tasks with specific tag values (TBD) | --tags |
-| ANSIBLE_SKIP_TAGS | skip_tags | Skip Ansible tasks with specific tag values (TBD) | --skip-tags |
-| EXTRA_ARGS | extra_args | Additional options appended to ansible-playbook command (TBD) | NA |
-| WINDOWS_GROUP | windows_group | Group name in Ansible inventory where WinRM should be used with WinRM parameters (TBD) | NA |
-| VIRTUAL_ENV | virtual_env_path | Path to Python virtual environment directory (must contain ./bin/ansible-playbook) | NA |
+| ANSIBLE_SKIP_TAGS | skip-tags | Skip Ansible tasks with specific tag values (TBD) | --skip-tags |
+| EXTRA_ARGS | extra-args | Additional options appended to ansible-playbook command | NA |
+| WINDOWS_GROUP | windows-group | Group name in Ansible inventory where WinRM should be used with WinRM parameters (TBD) | NA |
+| VIRTUAL_ENV | virtual-env-path | Path to Python virtual environment directory (must contain ./bin/ansible-playbook) | NA |
 | CONTAINER_IMAGE | image | Container image URI with ansible-shim, ansible-playbook, and any other playbook runtime dependencies (see [Dockerfile](./Dockerfile))| NA |
 | ANSIBLE_PLAYBOOK_TIMEOUT | NA | Number of seconds to timeout playbook execution | NA |
-|               | execution-type | optional to specify "container" or "venv" in case both image and virtual_env_path are defined | NA |
+|               | execution-type | optional to specify "container" or "venv" in case both image and virtual-env-path are defined | NA |
 
 - Only one INVENTORY_ parameter is required
 - Only one EXTA_VARS_ parameter can be specified
@@ -84,13 +86,13 @@ All configuration file arguments are initialized to empty-string or 0 based on t
 
 ```yaml
 ---
-virtual_env_path: "~/Documents/venv/ansible-latest"
+virtual-env-path: "~/Documents/venv/ansible-latest"
 # image: ansible-shim:latest
-ssh_private_key_file: "~/.ssh/id_rsa"
-remote_user: root
+ssh-private-key-file: "~/.ssh/id_rsa"
+remote-user: root
 inventory: "./examples/hosts.yml"
 playbook: "./examples/site.yml"
-verbose_level: 1
+verbose-level: 1
 environment-variables:
   pass:
     - ONE

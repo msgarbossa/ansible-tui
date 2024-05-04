@@ -1,13 +1,14 @@
 ---
 
-execution-type: container
+execution-type: venv
 virtual-env-path: "~/Documents/venv/ansible-latest"
 image: localhost/ansible-shim:latest
-playbook: ./test/playbook-simple.yml
+playbook: ./test/playbook-vault.yml
 inventory: ./test/inventory-localhost.txt
-verbose-level: 1
+verbose-level: 3
 environment-variables:
   pass:
-    - USER
+    - ANSIBLE_VAULT_PASSWORD_FILE
   set:
+    # ANSIBLE_VAULT_PASSWORD_FILE: ./test/vault-pw.txt
     ANSIBLE_OPENTELEMETRY_ENABLED: "false"

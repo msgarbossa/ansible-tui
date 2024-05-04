@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -13,10 +12,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -35,19 +32,19 @@ type PlaybookEnvironmentVariables struct {
 // struct for storing and passing playbook configurations (marshal, unmarshal, methods, function calls)
 type PlaybookConfig struct {
 	Playbook             string                       `yaml:"playbook" json:"playbook"`
-	VerboseLevel         int                          `yaml:"verbose_level" json:"verbose_level"`
-	SshPrivateKeyFile    string                       `yaml:"ssh_private_key_file" json:"ssh_private_key_file"`
-	RemoteUser           string                       `yaml:"remote_user" json:"remote_user"`
+	VerboseLevel         int                          `yaml:"verbose-level" json:"verbose-level"`
+	SshPrivateKeyFile    string                       `yaml:"ssh-private-key-file" json:"ssh-private-key-file"`
+	RemoteUser           string                       `yaml:"remote-user" json:"remote-user"`
 	InventoryFile        string                       `yaml:"inventory" json:"inventory"`
 	LimitHost            string                       `yaml:"limit" json:"limit"`
-	ExtraVarsFile        string                       `yaml:"extra_vars_file" json:"extra_vars_file"`
+	ExtraVarsFile        string                       `yaml:"extra-vars-file" json:"extra-vars-file"`
 	AnsibleTags          string                       `yaml:"tags" json:"tags"`
-	AnsibleSkipTags      string                       `yaml:"skip_tags" json:"skip_tags"`
-	ExtraArgs            string                       `yaml:"extra_args" json:"extra_args"`
-	WindowsGroup         string                       `yaml:"windows_group" json:"windows_group"`
+	AnsibleSkipTags      string                       `yaml:"skip-tags" json:"skip-tags"`
+	ExtraArgs            string                       `yaml:"extra-args" json:"extra-args"`
+	WindowsGroup         string                       `yaml:"windows-group" json:"windows-group"`
 	ExecutionType        string                       `yaml:"execution-type" json:"execution-type"`
 	Image                string                       `yaml:"image" json:"image"`
-	VirtualEnvPath       string                       `yaml:"virtual_env_path" json:"virtual_env_path"`
+	VirtualEnvPath       string                       `yaml:"virtual-env-path" json:"virtual-env-path"`
 	EnvironmentVariables PlaybookEnvironmentVariables `yaml:"environment-variables"`
 	Metrics              PlaybookMetrics
 }
@@ -240,11 +237,12 @@ func (c *PlaybookConfig) validateInputs() error {
 		slog.Info(fmt.Sprintf("Checking Python virtual environment path: %s", c.VirtualEnvPath))
 		if strings.HasPrefix(c.VirtualEnvPath, "~") {
 			home := os.Getenv("HOME")
+			slog.Info(fmt.Sprintf("HOME=%s", home))
 			c.VirtualEnvPath = strings.Replace(c.VirtualEnvPath, "~", home, 1)
 		}
 		err := sanitizePath(c.VirtualEnvPath)
 		if err != nil {
-			slog.Error("Error santizing path to virtual environment directory")
+			slog.Error(fmt.Sprintf("santizing path to virtual environment directory: %s", c.VirtualEnvPath))
 			return err
 		}
 		absPath, _ = filepath.Abs(c.VirtualEnvPath)
@@ -311,6 +309,7 @@ func (c *PlaybookConfig) processInputs() error {
 	// These env keys are required for a default shell and should not be unset
 	autoPassEnvs := make(map[string]bool)
 	autoPassEnvs["PATH"] = true
+	autoPassEnvs["HOME"] = true
 
 	// Pass through environment variables listed under environment-variables.pass
 	// Capture values to be able to pass into container.
@@ -341,6 +340,9 @@ func (c *PlaybookConfig) processInputs() error {
 		c.EnvironmentVariables.Set[k] = v
 		envKeyIdx[k] = true
 	}
+
+	// clear list of "pass through" variables since they were converted to "set"
+	c.EnvironmentVariables.Pass = c.EnvironmentVariables.Pass[:0]
 
 	// delete all other environment variables
 	for _, e := range os.Environ() {
@@ -745,88 +747,19 @@ func executePlaybookInContainer(c PlaybookConfig) (int, error) {
 		return 1, err
 	}
 
+	// TODO: Should run a separate image pull here so container execution time is more predictable relative to supplied timout.
+	// With separate pull can just add a few seconds.
+
 	// get timeout value, which if set will be used below to set context.WithTimeout
-	ansiblePlaybookTimeout, err := strconv.Atoi(LookupEnvOrString("ANSIBLE_PLAYBOOK_TIMEOUT", "-1"))
-	if err != nil {
-		slog.Error("Could not convert ANSIBLE_PLAYBOOK_TIMEOUT to integer")
-		return 1, err
-	}
+	// ansiblePlaybookTimeout, err := strconv.Atoi(LookupEnvOrString("ANSIBLE_PLAYBOOK_TIMEOUT", "-1"))
+	// if err != nil {
+	// 	slog.Error("Could not convert ANSIBLE_PLAYBOOK_TIMEOUT to integer")
+	// 	return 1, err
+	// }
+	// Set container execution timeout to unlimited until above TODO for image pull is working
+	ansiblePlaybookTimeout := -1
 
-	ctx, cancel := context.WithCancel(context.Background())
-	if ansiblePlaybookTimeout > 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(ansiblePlaybookTimeout)*time.Second)
-	}
-
-	defer func() {
-		for {
-			select {
-			case <-ctx.Done():
-				// fmt.Println(ctx.Err())
-				// slog.Error(fmt.Sprintf("executePlaybookInContainer context: %s", ctx.Err()))
-				return
-			default:
-				// fmt.Println("finished")
-				// slog.Info("executePlaybookInContainer context finished")
-				cancel()
-			}
-		}
-	}()
-
-	slog.Debug(fmt.Sprintf("%s %s", containerCmd, containerArgs))
-
-	cmd := exec.CommandContext(ctx, containerCmd, containerArgs...)
-
-	slog.Info(cmd.String())
-	cmd.Stderr = os.Stdout
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		slog.Error(fmt.Sprintf("cmd.StdoutPipe: %s", err))
-		return 1, err
-	}
-	slog.Info("Starting container execution")
-	if err := cmd.Start(); err != nil {
-		slog.Error(fmt.Sprintf("cmd.Start: %s", err))
-		return 1, err
-	}
-
-	defer cmd.Wait()
-
-	go func() {
-		reader := bufio.NewReader(stdout)
-		for {
-			strline, err := readLine(reader)
-			if err != nil && err != io.EOF {
-				log.Fatal(err)
-			}
-
-			fmt.Println(strline)
-
-			if err == io.EOF {
-				slog.Debug("EOF.  Done reading buffered output in container")
-				break
-			}
-		}
-	}()
-
-	pid := cmd.Process.Pid
-	slog.Info(fmt.Sprintf("PID for container command: %d", pid))
-
-	rc := 0
-	if err := cmd.Wait(); err != nil {
-		slog.Info(fmt.Sprintf("Checking status: %s", err))
-		if exiterr, ok := err.(*exec.ExitError); ok {
-			slog.Info(fmt.Sprintf("Exit Status: %d", exiterr.ExitCode()))
-			slog.Info(exiterr.String())
-			rc = exiterr.ExitCode()
-		} else {
-			slog.Error(fmt.Sprintf("cmd.Wait: %v", exiterr))
-			// rc = exiterr.ExitCode()
-			rc = 1
-		}
-	}
-
-	slog.Info(fmt.Sprintf("container finished: rc=%d", rc))
-	return rc, err
+	return runBufferedCommandWithoutCapture(containerCmd, containerArgs, ansiblePlaybookTimeout)
 
 }
 
@@ -898,10 +831,24 @@ func (c *PlaybookConfig) runAnsiblePlaybook() (int, error) {
 		return 1, err
 	}
 
+	// run ansible version
+
+	// if requirements.yml exists, run ansible-galaxy install
+	// slog.Debug("setup Ansible roles with ansible-galaxy")
+	// ansible-galaxy install -r ./roles/requirements.yml
+	// ansible-galaxy install -r ./playbooks/roles/requirements.yml
+
 	ansiblePlaybookArgs = append(ansiblePlaybookArgs, "-i", c.InventoryFile, c.Playbook)
 
 	if c.LimitHost != "" {
 		ansiblePlaybookArgs = append(ansiblePlaybookArgs, "--limit", c.LimitHost)
+	}
+
+	if c.ExtraArgs != "" {
+		slog.Info("Adding extra-args to ansible-playbook command")
+		// split string on spaces (also removing \t and \n), append to ansiblePlaybookArgs
+		s := strings.Fields(c.ExtraArgs)
+		ansiblePlaybookArgs = append(ansiblePlaybookArgs, s...)
 	}
 
 	ansiblePlaybookTimeout, err := strconv.Atoi(LookupEnvOrString("ANSIBLE_PLAYBOOK_TIMEOUT", "-1"))
@@ -910,95 +857,6 @@ func (c *PlaybookConfig) runAnsiblePlaybook() (int, error) {
 		return 1, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	if ansiblePlaybookTimeout > 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(ansiblePlaybookTimeout)*time.Second)
-	}
+	return runBufferedCommandWithoutCapture(ansibleCmdPath, ansiblePlaybookArgs, ansiblePlaybookTimeout)
 
-	defer func() {
-		for {
-			select {
-			case <-ctx.Done():
-				// fmt.Println(ctx.Err())
-				// slog.Error(fmt.Sprintf("runAnsiblePlaybook context: %s", ctx.Err()))
-				return
-			default:
-				//fmt.Println("finished")
-				// slog.Info("runAnsiblePlaybook context finished")
-				cancel()
-			}
-		}
-	}()
-
-	slog.Debug(fmt.Sprintf("%s %s", ansibleCmdPath, ansiblePlaybookArgs))
-
-	cmd := exec.CommandContext(ctx, ansibleCmdPath, ansiblePlaybookArgs...)
-
-	slog.Info(cmd.String())
-	cmd.Stderr = os.Stdout
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		slog.Error(fmt.Sprintf("cmd.StdoutPipe: %s", err))
-		return 1, err
-	}
-	slog.Info("Starting playbook execution")
-	if err := cmd.Start(); err != nil {
-		slog.Error(fmt.Sprintf("cmd.Start: %s", err))
-		return 1, err
-	}
-
-	defer cmd.Wait()
-
-	go func() {
-		reader := bufio.NewReader(stdout)
-		for {
-			strline, err := readLine(reader)
-			if err != nil && err != io.EOF {
-				log.Fatal(err)
-			}
-
-			fmt.Println(strline)
-
-			if err == io.EOF {
-				slog.Debug("EOF.  Done reading buffered output for ansible-playbook")
-				break
-			}
-		}
-	}()
-
-	pid := cmd.Process.Pid
-	slog.Info(fmt.Sprintf("PID for ansible-playbook command: %d", pid))
-
-	if err := cmd.Wait(); err != nil {
-		if exiterr, ok := err.(*exec.ExitError); ok {
-			slog.Info(fmt.Sprintf("Exit Status: %d", exiterr.ExitCode()))
-			rc = exiterr.ExitCode()
-		} else {
-			slog.Error(fmt.Sprintf("cmd.Wait: %v", err))
-			// rc = exiterr.ExitCode()
-			rc = 1
-		}
-	}
-
-	// PrintMemUsage()
-
-	slog.Info(fmt.Sprintf("ansible-playbook finished: rc=%d", rc))
-	return rc, err
-}
-
-// PrintMemUsage outputs the current, total and OS memory being used. As well as the number
-// of garbage collection cycles completed.
-func PrintMemUsage() {
-
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
-	fmt.Printf("Alloc = %v MiB", bToMb(m.Alloc))
-	fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
-	fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
-	fmt.Printf("\tNumGC = %v\n", m.NumGC)
-}
-
-func bToMb(b uint64) uint64 {
-	return b / 1024 / 1024
 }
