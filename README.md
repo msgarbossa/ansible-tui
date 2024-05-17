@@ -1,8 +1,8 @@
-# ansible-shim
+# ansible-tui
 
 ## Description
 
-ansible-shim is a lightweight CLI wrapper written in Go for running ansible-playbook.  ansible-shim provides both an environment-variable and YAML based API to enable ansible-playbook to be run by other tools and services.
+ansible-tui is a lightweight CLI wrapper written in Go for running ansible-playbook.  ansible-tui provides both an environment-variable and YAML based API to enable ansible-playbook to be run by other tools and services.
 
 ## How it works
 
@@ -15,7 +15,7 @@ flowchart TD
     E --> F{Container?}
     F --> |no| G(Find path to ansible)
     F --> |yes| H(Write full config file)
-    H --> I(Run container w/ ansible-shim against config)
+    H --> I(Run container w/ ansible-tui against config)
     I --> A
     G --> J(Validate Ansible inventory)
     J --> K(Run ansible-playbook)
@@ -25,22 +25,26 @@ flowchart TD
 
 See [setup](#setup) instructions below for dependencies and first-time setup.
 
-ansible-shim first looks for a YAML configuration file with the playbook execution parameters.  The path to the YAML configuration file can be specified with either PB_CONFIG_FILE environment variable or with the -c command line option.
+ansible-tui first looks for a YAML configuration file with the playbook execution parameters.  The path to the YAML configuration file can be specified with either PB_CONFIG_FILE environment variable or with the -c command line option.
 
 ### CLI
 
 ```bash
-$ ansible-shim -h
-Usage of ansible-shim:
+$ ansible-tui -h
+Usage of ansible-tui:
   -c string
     	Playbook config file (PB_CONFIG_FILE)
-  -v	Sets log level for ansible-shim to INFO (default WARN)
+  -g	Generate ansible-tui.yml template and exit
+  -nt
+    	No TUI.  Runs playbook from configuration file without TUI
+  -v	Sets log level for ansible-tui to INFO (default WARN)
   -version
     	Display version and exit
   -vv
-    	Sets log level for ansible-shim to DEBUG (default WARN)
+    	Sets log level for ansible-tui to DEBUG (default WARN)
 
-$ ansible-shim --version
+
+$ ansible-tui --version
 Version:	v0.1.1
 Build date:	20240214
 ```
@@ -56,7 +60,8 @@ See [example output](#example-output) below.
 
 | ENV Parameter | YAML Parameter | Purpose | ansible-playbook CLI option |
 | ------------- | -------------- | ------- | --------------------------- |
-| PB_CONFIG_FILE | NA | Relative path to YAML configuration which is read before environment variables are processed (can also be passed to ansible-shim with -c) | NA |
+| TMP_DIR_PATH   | temp-dir-path | Relative or absolute path to temporary location to write files (default ./.ansible) | NA |
+| PB_CONFIG_FILE | NA | Relative path to YAML configuration which is read before environment variables are processed.  Can also be passed to ansible-tui with -c.  Default is TMP_DIR_PATH/ansible-tui.yml. | NA |
 | PLAYBOOK | playbook | Relative path to the playbook to execute | NA |
 | VERBOSE_LEVEL | verbose-level (int) | String containing 0-4, corresponding the number of v's controlling the level of verbosity | -v, -vv, -vvv, -vvvv |
 | SSH_PRIVATE_KEY_FILE | ssh-private-key-file | Path to SSH private key (for SSH connections only) | NA |
@@ -72,13 +77,26 @@ See [example output](#example-output) below.
 | EXTRA_ARGS | extra-args | Additional options appended to ansible-playbook command | NA |
 | WINDOWS_GROUP | windows-group | Group name in Ansible inventory where WinRM should be used with WinRM parameters (TBD) | NA |
 | VIRTUAL_ENV | virtual-env-path | Path to Python virtual environment directory (must contain ./bin/ansible-playbook) | NA |
-| CONTAINER_IMAGE | image | Container image URI with ansible-shim, ansible-playbook, and any other playbook runtime dependencies (see [Dockerfile](./Dockerfile))| NA |
-| ANSIBLE_PLAYBOOK_TIMEOUT | NA | Number of seconds to timeout playbook execution | NA |
+| CONTAINER_IMAGE | image | Container image URI with ansible-tui, ansible-playbook, and any other playbook runtime dependencies (see [Dockerfile](./Dockerfile))| NA |
+| ANSIBLE_PLAYBOOK_TIMEOUT | playbook-timeout | Number of seconds to timeout playbook execution | NA |
 |               | execution-type | optional to specify "container" or "venv" in case both image and virtual-env-path are defined | NA |
 
 - Only one INVENTORY_ parameter is required
 - Only one EXTA_VARS_ parameter can be specified
 - Either VIRTUAL_ENV or CONTAINER_IMAGE can be specified.  In a container image, ansible-playbook must be in the environment's PATH.
+
+### TUI-specific Parameters
+
+These parameters are nested under the "tui" key in the YAML file to assist populating the TUI with relevant files to set playbook parameters.
+
+| ENV Parameter        | YAML Parameter | Purpose | ansible-playbook CLI option |
+| -------------------- | -------------- | ------- | --------------------------- |
+| NO_TUI               | NA             | Do not use TUI, just run supplied configuration file |
+| TUI_PLAYBOOK_DIR     | playbook-dir   | Relative path to directory with playbook files.  Will NOT recurse UNLESS value is ".".  The default is "./playbooks" if it exists, otherwise ".". | NA |
+| TUI_INVENTORY_DIR    | inventory-dir  | Relative path to directory with inventory files.  Will recurse UNLESS value is ".".  The default is "./inventory" if it exists, otherwise "." | NA |
+| TUI_VIRTUAL_ENVS_DIR | virtual-envs-dir  | Absolute path to directory containing one or more directories with Python virtual environments.  The ~ character is allowed as a shortcut to the HOME directory.  The default is "", indicating no virtual environments will be used. | NA |
+| TUI_IMAGE_FILTER     |  image-filter  | Simple string to filter list of images to display.  Default "ansible".  Unset or use "" will display all images. | NA |
+
 
 ### YAML Configuration file
 
@@ -87,7 +105,7 @@ All configuration file arguments are initialized to empty-string or 0 based on t
 ```yaml
 ---
 virtual-env-path: "~/Documents/venv/ansible-latest"
-# image: ansible-shim:latest
+# image: ansible-tui:latest
 ssh-private-key-file: "~/.ssh/id_rsa"
 remote-user: root
 inventory: "./examples/hosts.yml"
@@ -102,6 +120,12 @@ environment-variables:
     KEY1: VALUE1
     KEY2: VALUE2
     KEY3: VALUE3
+tui:
+  playbook-dir: ./playbooks
+  inventory-dir: ./inventory
+  image-filter: ansible
+  virtual-envs-dir: ~/venvs
+
 ```
 
 ## Setup
@@ -172,8 +196,8 @@ go version go1.22.0 linux/amd64
 
 ```bash
 $ task go_build_linux
-$ sudo cp ./out/ansible-shim-*-linux-amd64 /usr/local/bin/ansible-shim
-$ sudo chmod 755 /usr/local/bin/ansible-shim
+$ sudo cp ./out/ansible-tui-*-linux-amd64 /usr/local/bin/ansible-tui
+$ sudo chmod 755 /usr/local/bin/ansible-tui
 ```
 
 ### Python virtual environment setup
@@ -190,7 +214,7 @@ pip3 install -r ./test/requirements.txt
 
 ### Container runtime
 
-- The included Dockerfile builds a basic Ansible runtime environment and includes ansible-shim.
+- The included Dockerfile builds a basic Ansible runtime environment and includes ansible-tui.
 - Docker or Podman can be used to execute ansible inside a container.  If both Docker and Podman are installed, Podman is used.
 - Docker and Podman use separate image caches.  Docker will not find a local container in the Podman registry and vice-versa.  The image should be pushed to an external registry.
 - When building the image, the default container name and tag are specified in the `vars` section at the top of Taskfile.yml.
@@ -213,7 +237,7 @@ $ task podman_build
 The following output is from a container execution using podman.  The final return code is determined by the return code from ansible-playbook.
 
 ```bash
-$ ansible-shim -c examples/ansible-shim.yml 
+$ ansible-tui -c examples/ansible-tui.yml 
 Using /etc/ansible/ansible.cfg as config file
 
 PLAY [Playbook for testing simple Ansible modules] *****************************
@@ -224,8 +248,6 @@ ok: [testhost] => {"ansible_facts": {"discovered_interpreter_python": "/usr/bin/
 PLAY RECAP *********************************************************************
 testhost                   : ok=1    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
 
-context canceled
-context canceled
 $ echo $?
 0
 ```

@@ -22,7 +22,7 @@ RUN pip3 install --no-cache-dir ansible opentelemetry-api opentelemetry-exporter
 #     ansible-galaxy collection install ansible.utils -p ${COLLECTION_PATH} && \
 #     ansible-galaxy collection install community.general -p ${COLLECTION_PATH}
 
-COPY ./out/ansible-shim-*-linux-amd64 /bin/ansible-shim
+COPY ./out/ansible-tui-*-linux-amd64 /bin/ansible-tui
 
 RUN mkdir -p /app/.ssh && chmod 750 /app && chmod 700 /app/.ssh && \
     mkdir /etc/ansible && \
@@ -36,4 +36,3 @@ RUN mkdir -p /app/.ssh && chmod 750 /app && chmod 700 /app/.ssh && \
 
 WORKDIR /app
 
-ENTRYPOINT ["/bin/ansible-shim"]

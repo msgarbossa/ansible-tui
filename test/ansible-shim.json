@@ -3,5 +3,5 @@
     "inventory": "./test/inventory-localhost.txt",
     "playbook": "./test/playbook-simple.yml",
     "verbose-level": 1,
-    "image": "ansible-shim:latest"
+    "image": "ansible-tui:latest"
 }
