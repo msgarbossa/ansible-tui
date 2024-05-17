@@ -2,7 +2,7 @@
 
 execution-type: container
 virtual-env-path: "~/Documents/venv/ansible-latest"
-image: localhost/ansible-shim:latest
+image: localhost/ansible-tui:latest
 playbook: ./test/playbook-simple.yml
 inventory: ./test/inventory-localhost.txt
 verbose-level: 1

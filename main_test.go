@@ -1,6 +1,7 @@
 package main
 
 import (
+	"a5e/cmd"
 	"log/slog"
 	"net"
 	"os"
@@ -10,7 +11,7 @@ import (
 
 // global
 var (
-	pb          PlaybookConfig
+	c           *cmd.PlaybookConfig
 	projectRoot string
 	httpPort    string
 )
@@ -52,24 +53,26 @@ func TestValidInputs(t *testing.T) {
 		os.Unsetenv("VIRTUAL_ENV")
 	}
 
-	pb = PlaybookConfig{}
-	os.Chdir("../../")
+	c = cmd.NewPlaybookConfig()
+	c.TempDirPath = defaultTempPath
+
+	//os.Chdir("../../")
 	projectRoot, _ = os.Getwd()
-	os.Setenv("PB_CONFIG_FILE", "./test/as-venv-otel.yml")
+	os.Setenv("PB_CONFIG_FILE", "./test/as-venv.yml")
 	os.Setenv("INVENTORY_FILE", "./test/inventory-localhost.txt")
 	os.Setenv("PLAYBOOK", "./test/playbook-simple.yml")
 
-	err := pb.readConf(os.Getenv("PB_CONFIG_FILE"))
+	err := c.ReadConf(os.Getenv("PB_CONFIG_FILE"))
 	if err != nil {
 		t.Errorf("Expected no errors reading config file, got %s", err)
 	}
 
-	err = pb.readEnvs()
+	err = c.ReadEnvs()
 	if err != nil {
 		t.Errorf("Expected no errors reading environment variables, got %s", err)
 	}
 
-	err = pb.validateInputs()
+	err = c.ValidateInputs()
 	if err != nil {
 		t.Errorf("Expected no errors validating inputs, got %s", err)
 	}
@@ -78,12 +81,12 @@ func TestValidInputs(t *testing.T) {
 func TestInvalidInputs(t *testing.T) {
 	os.Setenv("INVENTORY_FILE", "./test/inventory-localhost2.txt")
 
-	err := pb.readEnvs()
+	err := c.ReadEnvs()
 	if err != nil {
 		t.Errorf("Expected no errors reading environment variables, got %s", err)
 	}
 
-	err = pb.validateInputs()
+	err = c.ValidateInputs()
 	if err == nil {
 		t.Errorf("Expected errors validating inputs, got %s", err)
 	}
@@ -91,24 +94,25 @@ func TestInvalidInputs(t *testing.T) {
 
 func TestInvalidInventory(t *testing.T) {
 	os.Setenv("INVENTORY_FILE", "./test/inventory-invalid.txt")
+	// os.Setenv("VERBOSE_LEVEL", "3")
 
-	err := pb.readEnvs()
+	err := c.ReadEnvs()
 	if err != nil {
 		t.Errorf("Expected no errors reading environment variables, got %s", err)
 	}
 
-	err = pb.validateInputs()
+	err = c.ValidateInputs()
 	if err != nil {
 		t.Errorf("Expected no errors validating inputs, got %s", err)
 	}
 
-	err = pb.processInputs()
+	err = c.ProcessEnvs()
 	if err != nil {
 		t.Errorf("Expected no errors processing inputs, got %s", err)
 	}
 
 	// inventory validation is done just before playbook execution
-	rc, err := pb.runAnsiblePlaybook()
+	rc, err := c.RunAnsiblePlaybook()
 	if err == nil {
 		t.Errorf("Expected errors validating inventory, got %s", err)
 	}
@@ -122,27 +126,27 @@ func TestSimplePlaybookVenv(t *testing.T) {
 
 	os.Setenv("PB_CONFIG_FILE", "./test/as-venv.yml")
 
-	err := pb.readConf(os.Getenv("PB_CONFIG_FILE"))
+	err := c.ReadConf(os.Getenv("PB_CONFIG_FILE"))
 	if err != nil {
 		t.Errorf("Expected no errors reading config file, got %s", err)
 	}
 
-	err = pb.readEnvs()
+	err = c.ReadEnvs()
 	if err != nil {
 		t.Errorf("Expected no errors reading environment variables, got %s", err)
 	}
 
-	err = pb.validateInputs()
+	err = c.ValidateInputs()
 	if err != nil {
 		t.Errorf("Expected no errors validating inputs, got %s", err)
 	}
 
-	err = pb.processInputs()
+	err = c.ProcessEnvs()
 	if err != nil {
 		t.Errorf("Expected no errors processing inputs, got %s", err)
 	}
 
-	rc, err := pb.runAnsiblePlaybook()
+	rc, err := c.RunAnsiblePlaybook()
 	if err != nil {
 		t.Errorf("Expected no errors running playbook, got %s", err)
 	}
@@ -156,27 +160,27 @@ func TestSimplePlaybookContainer(t *testing.T) {
 
 	os.Setenv("PB_CONFIG_FILE", "./test/as-container.yml")
 
-	err := pb.readConf(os.Getenv("PB_CONFIG_FILE"))
+	err := c.ReadConf(os.Getenv("PB_CONFIG_FILE"))
 	if err != nil {
 		t.Errorf("Expected no errors reading config file, got %s", err)
 	}
 
-	err = pb.readEnvs()
+	err = c.ReadEnvs()
 	if err != nil {
 		t.Errorf("Expected no errors reading environment variables, got %s", err)
 	}
 
-	err = pb.validateInputs()
+	err = c.ValidateInputs()
 	if err != nil {
 		t.Errorf("Expected no errors validating inputs, got %s", err)
 	}
 
-	err = pb.processInputs()
+	err = c.ProcessEnvs()
 	if err != nil {
 		t.Errorf("Expected no errors processing inputs, got %s", err)
 	}
 
-	rc, err := pb.runAnsiblePlaybook()
+	rc, err := c.RunAnsiblePlaybook()
 	if err != nil {
 		t.Errorf("Expected no errors running playbook, got %s", err)
 	}
@@ -191,27 +195,27 @@ func TestAnsibleVaultVenv(t *testing.T) {
 	os.Setenv("PB_CONFIG_FILE", "./test/as-venv-vault.yml")
 	os.Setenv("ANSIBLE_VAULT_PASSWORD_FILE", "./test/vault-pw.txt")
 
-	err := pb.readConf(os.Getenv("PB_CONFIG_FILE"))
+	err := c.ReadConf(os.Getenv("PB_CONFIG_FILE"))
 	if err != nil {
 		t.Errorf("Expected no errors reading config file, got %s", err)
 	}
 
-	err = pb.readEnvs()
+	err = c.ReadEnvs()
 	if err != nil {
 		t.Errorf("Expected no errors reading environment variables, got %s", err)
 	}
 
-	err = pb.validateInputs()
+	err = c.ValidateInputs()
 	if err != nil {
 		t.Errorf("Expected no errors validating inputs, got %s", err)
 	}
 
-	err = pb.processInputs()
+	err = c.ProcessEnvs()
 	if err != nil {
 		t.Errorf("Expected no errors processing inputs, got %s", err)
 	}
 
-	rc, err := pb.runAnsiblePlaybook()
+	rc, err := c.RunAnsiblePlaybook()
 	if err != nil {
 		t.Errorf("Expected no errors running playbook, got %s", err)
 	}
@@ -242,7 +246,7 @@ func TestAnsibleVaultVenv(t *testing.T) {
 
 // 	// start listener
 // 	//go startHttpListener(ctx)
-// 	go mainListener()
+// 	go MainListener()
 // 	time.Sleep(time.Second * 1)
 
 // 	httpPorts := []string{httpPort}
@@ -260,7 +264,7 @@ func TestAnsibleVaultVenv(t *testing.T) {
 // func TestDataIngestion(t *testing.T) {
 
 // 	// slurp entire file contents into memory
-// 	contents, err := os.ReadFile("./test/ansible-shim.json")
+// 	contents, err := os.ReadFile("./test/ansible-tui.json")
 // 	if err != nil {
 // 		t.Error("failed to read JSON input")
 // 	}

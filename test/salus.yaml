@@ -1,7 +1,7 @@
 ---
 # String
 # Used in the report to identify the project being scanned.
-project_name: "ansible-shim"
+project_name: "ansible-tui"
 
 # String
 # Used in the report for any additional information

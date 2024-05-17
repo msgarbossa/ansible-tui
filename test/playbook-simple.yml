@@ -44,6 +44,6 @@
     # to truncate extremely long lines.
     # - name: Slurp large file
     #   ansible.builtin.slurp:
-    #     src: ../out/ansible-shim-v0.2.0-linux-amd64  # for virtualenv
-    #     #  src: /app/out/ansible-shim-v0.2.0-linux-amd64  # for container image
+    #     src: ../out/ansible-tui-v0.2.0-linux-amd64  # for virtualenv
+    #     #  src: /app/out/ansible-tui-v0.2.0-linux-amd64  # for container image
     #   register: slurped
