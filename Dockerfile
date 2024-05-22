@@ -6,14 +6,18 @@ ARG COLLECTION_PATH=/usr/share/ansible/collections
 
 RUN apt-get update && apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
+        locales \
         openssh-client \
         software-properties-common \
         python3-pip \
         git && \
+    localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8 && \
     apt-get clean && \
     rm -Rf /var/lib/apt/lists/* && \
     rm -Rf /usr/share/doc && rm -Rf /usr/share/man && \
     rm -rf /var/tmp* && rm -rf /tmp/*
+
+ENV LANG en_US.UTF-8
 
 RUN pip3 install --no-cache-dir ansible opentelemetry-api opentelemetry-exporter-otlp opentelemetry-sdk
 
@@ -24,6 +28,7 @@ RUN pip3 install --no-cache-dir ansible opentelemetry-api opentelemetry-exporter
 
 COPY ./out/ansible-tui-*-linux-amd64 /bin/ansible-tui
 
+# Setup workdir and /etc/ansible/ansible.cfg
 RUN mkdir -p /app/.ssh && chmod 750 /app && chmod 700 /app/.ssh && \
     mkdir /etc/ansible && \
     ansible-config init --disabled -t all > /etc/ansible/ansible.cfg && \
