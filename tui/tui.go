@@ -117,6 +117,7 @@ func (tui *TUI) mainMenu(c *cmd.PlaybookConfig) *tview.List {
 		AddItem("Image", c.Image, 'I', func() { tui.listImages() }).
 		AddItem("Advanced", "", 'a', func() { tui.showAdvanced() }).
 		AddItem("Save", "", 's', func() { tui.save() }).
+		AddItem("Lint", "", 'L', func() { tui.lintMenu() }).
 		AddItem("Run", "", 'r', func() {
 			tui.flex.Clear()
 			tui.app.Sync()
@@ -306,6 +307,18 @@ func (tui *TUI) handleSelectedTableCell(row int, col int) {
 		tui.textMain1.Clear()
 		tui.app.SetFocus(tui.listNav)
 		tui.app.Sync()
+	case "Lint":
+		fields := strings.Fields(cell)
+		lintType := fields[0]
+		tui.flex.Clear()
+		tui.app.Sync()
+		tui.Stop()
+		tuiExecuteLint(tui.pbConfig, lintType)
+		// tui.pages.SwitchToPage("main text")
+		// tui.textMain1.Clear()
+		// tui.app.SetFocus(tui.textMain1)
+		// tui.textMain1.SetText(fmt.Sprintf("Running %s lint...", lintType))
+		// tui.app.Sync()
 	}
 
 }

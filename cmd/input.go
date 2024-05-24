@@ -74,48 +74,7 @@ func (m *ExecutionError) Error() string {
 func NewPlaybookConfig() *PlaybookConfig {
 	return &PlaybookConfig{
 		PlaybookTimeout: 86400,
-		VerboseLevel:    1,
 	}
-}
-
-func (c *PlaybookConfig) GenerateTemplateFile(defaultConfigFilePath string) error {
-
-	// read environment variables into PlaybookConfig struct (also creates temp-dir)
-	err := c.ReadEnvs()
-	if err != nil {
-		slog.Error(fmt.Sprintf("Exiting due to error reading environment variables: %s", err))
-		os.Exit(1)
-	}
-
-	playbookDir := "."
-	if ok, _ := pathExists("./playbooks", true); ok {
-		playbookDir = "./playbooks"
-	}
-
-	inventoryDir := "."
-	if ok, _ := pathExists("./inventory", true); ok {
-		inventoryDir = "./inventory"
-	}
-
-	contents := `---
-# virtual-env-path: ""
-image: ansible-tui:latest
-ssh-private-key-file: "~/.ssh/id_rsa"
-remote-user: root
-inventory: "./examples/hosts.yml"
-playbook: "./examples/site.yml"
-verbose-level: 1
-
-tui:
-  playbook-dir: "` + playbookDir + `"
-  inventory-dir: "` + inventoryDir + `"
-  image-filter: ansible
-  virtual-envs-dir: ""
-`
-
-	WriteFileFromString(defaultConfigFilePath, contents)
-
-	return nil
 }
 
 func (c *PlaybookConfig) ReadEnvs() error {

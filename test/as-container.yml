@@ -4,7 +4,7 @@ execution-type: container
 virtual-env-path: "~/Documents/venv/ansible-latest"
 image: localhost/ansible-tui:latest
 playbook: ./test/playbook-simple.yml
-inventory: ./test/inventory-localhost.txt
+inventory: ./test/inventory-localhost.ini
 verbose-level: 1
 environment-variables:
   pass:

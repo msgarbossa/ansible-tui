@@ -1,9 +1,0 @@
----
-
-virtual_env_path: "~/Documents/venv/ansible-latest"
-# image: ansible-shim:latest
-ssh_private_key_file: "~/.ssh/id_rsa"
-remote_user: gopher
-inventory: ./examples/hosts.yml
-playbook: ./examples/site.yml
-verbose_level: 1

@@ -59,7 +59,7 @@ func TestValidInputs(t *testing.T) {
 	//os.Chdir("../../")
 	projectRoot, _ = os.Getwd()
 	os.Setenv("PB_CONFIG_FILE", "./test/as-venv.yml")
-	os.Setenv("INVENTORY_FILE", "./test/inventory-localhost.txt")
+	os.Setenv("INVENTORY_FILE", "./test/inventory-localhost.ini")
 	os.Setenv("PLAYBOOK", "./test/playbook-simple.yml")
 
 	err := c.ReadConf(os.Getenv("PB_CONFIG_FILE"))

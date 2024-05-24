@@ -54,6 +54,7 @@ func sanitizePath(path string) error {
 	return nil
 }
 
+// Pass an empty []string for exts to list all files in the directory.
 // Note: This function is very Unix-specific (not Windows compatible).
 //
 //	It also may have issues if dir = "/" or with symlinks.
@@ -64,9 +65,18 @@ func ListDir(dir string, exts []string) ([]string, error) {
 	if err != nil {
 		return files, err
 	}
+	filter := true
+	if len(exts) == 0 {
+		filter = false
+	}
 	for _, e := range entries {
 		// fmt.Println(e.Name())
 		path := e.Name()
+		if !filter {
+			path = dir + "/" + path
+			files = append(files, path)
+			continue
+		}
 		for _, s := range exts {
 			if s == "" && !strings.Contains(path, ".") {
 				path = dir + "/" + path
@@ -184,6 +194,33 @@ func WriteFileFromString(outputFilePath string, contents string) error {
 	}
 
 	return nil
+}
+
+// copyFileContents copies the contents of the file named src to the file named
+// by dst. The file will be created if it does not already exist. If the
+// destination file exists, all it's contents will be replaced by the contents
+// of the source file.
+func copyFileContents(src, dst string) (err error) {
+	in, err := os.Open(src)
+	if err != nil {
+		return
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return
+	}
+	defer func() {
+		cerr := out.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
+	if _, err = io.Copy(out, in); err != nil {
+		return
+	}
+	err = out.Sync()
+	return
 }
 
 func GetContainerRuntime() (string, error) {
@@ -399,4 +436,92 @@ func executeCommandInContainer(c PlaybookConfig, command string, cmdArgs []strin
 	// Set container execution timeout to unlimited (-1) until above TODO for image pull is working
 	return RunBufferedCommand(containerRunCmd, containerArgs, -1, captureOutput, captureFilePath)
 
+}
+
+func IsPlaybookFile(file string) (bool, error) {
+	// Detection criteria for playbooks:
+	// If file contains "become:", it is a playbook
+	// Playbook files often contain "hosts:", but so do YAML inventory files
+	// Playbooks do NOT contain "^all:" (YAML inventory files do contain ^all:)
+	// Read file and check if it contains "host:"
+
+	// read the whole file at once
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return false, err
+	}
+
+	s := string(b) // convert bytes to string
+	// check whether s contains "become:"
+	if strings.Contains(s, "become:") {
+		return true, nil
+	}
+
+	// Check for "hosts:" and not "^all:" in the file
+	if strings.Contains(s, "hosts:") && !strings.Contains(s, "^all:") {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func IsInventory(file string) (bool, error) {
+	// Checking inventory is more difficult to do efficiently than playbooks.
+	// In this quick check, simple pattern match rules are used to score the file
+
+	// read the whole file at once
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return false, err
+	}
+	s := string(b) // convert bytes to string
+
+	found := false
+	score := 0
+	// This should be enough to catch any YAML inventory files
+	// check for typical inventory file patterns
+	if !strings.Contains(s, "become:") {
+		score++
+	}
+	if strings.Contains(s, "children:") {
+		score += 4
+	}
+	if strings.Contains(s, "all:") {
+		score += 2
+	}
+	if score > 2 {
+		found = true
+		return true, nil
+	}
+
+	// Non-YAML inventory files are harder to detect so exclude yml and yaml extensions
+	// that should have been detected above.
+	ext := filepath.Ext(file)
+	if ext == ".yml" || ext == ".yaml" {
+		return false, nil
+	}
+
+	if ext == ".ini" {
+		score += 2
+	}
+
+	// Check for typical inventory file patterns in non-YAML inventory files
+	if strings.Contains(s, "ansible_host=") {
+		score += 2
+	}
+
+	// Doesn't work
+	// This will match "localhost" or any line with just a hostname pattern on it
+	// regExpHostname := regexp.MustCompile(`(?m)^[A-Za-z_][0-9A-Za-z_\-\_\.]{8,50}$`)
+	// m := regExpHostname.FindString(file)
+	// if m != "" {
+	// 	slog.Debug(fmt.Sprintf("file with: %s (%d)", file, score))
+	// 	score++
+	// }
+
+	if score > 1 {
+		return true, nil
+	}
+
+	return found, nil
 }

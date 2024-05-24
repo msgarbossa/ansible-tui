@@ -1,0 +1,10 @@
+---
+
+- name: Playbook for testing if TUI playbook detection works
+  hosts: all
+  gather_facts: false
+
+  tasks:
+
+    - name: Ping ssh target
+      ansible.builtin.ping:

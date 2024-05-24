@@ -255,7 +255,7 @@ $ echo $?
 
 ## Testing
 
-The tests defined in main_test.go pass input parameters via environment variables to run a test/playbook-simple.yml against localhost (test/inventory-localhost.txt).
+The tests defined in main_test.go pass input parameters via environment variables to run a test/playbook-simple.yml against localhost (test/inventory-localhost.ini).
 
 ```bash
 $ task test

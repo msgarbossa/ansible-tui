@@ -57,11 +57,13 @@ func (tui *TUI) saveAdvancedForm() {
 	tui.pbConfig.Tui.InventoryDir = tui.formAdvanced.GetFormItemByLabel("inventory-dir").(*tview.InputField).GetText()
 	tui.pbConfig.Tui.ImageFilter = tui.formAdvanced.GetFormItemByLabel("image-filter").(*tview.InputField).GetText()
 
+	tui.app.SetFocus(tui.listNav)
 	tui.save() // save struct to file
 }
 
 func (tui *TUI) renderHeader() {
 
+	// if nothing matches the switch statement below, display the default header
 	headerText := fmt.Sprintf(
 		`%-7s %-10s %-7s %-10s %-10s
 %-7s %-10s %-7s %-10s %-10s
@@ -78,7 +80,7 @@ func (tui *TUI) renderHeader() {
 %-7s %-10s %-7s %-10s %-10s
 	`, "<i>", "inspect", "<esc>", "back", "ansible-tui",
 			"<c>", "clear", "enter", "select", BuildVersion,
-			"", "", "", "", BuildDate)
+			"<a>", "show all", "", "", BuildDate)
 	case "Playbooks":
 		headerText = fmt.Sprintf(
 			`%-7s %-10s %-7s %-10s %-10s
@@ -86,7 +88,7 @@ func (tui *TUI) renderHeader() {
 %-7s %-10s %-7s %-10s %-10s
 	`, "<i>", "inspect", "<esc>", "back", "ansible-tui",
 			"", "", "enter", "select", BuildVersion,
-			"", "", "", "", BuildDate)
+			"<a>", "show all", "", "", BuildDate)
 	case "Inventory":
 		headerText = fmt.Sprintf(
 			`%-7s %-10s %-7s %-10s %-10s
@@ -94,7 +96,7 @@ func (tui *TUI) renderHeader() {
 %-7s %-10s %-7s %-10s %-10s
 		`, "<i>", "inspect", "<esc>", "back", "ansible-tui",
 			"<v>", "verify", "enter", "select", BuildVersion,
-			"", "", "", "", BuildDate)
+			"<a>", "show all", "", "", BuildDate)
 	}
 
 	// tui.textTop.SetText(fmt.Sprintf("version: %s\ndate: %s", BuildVersion, BuildDate))
@@ -103,6 +105,57 @@ func (tui *TUI) renderHeader() {
 
 func (tui *TUI) renderFooter(msg string) {
 	tui.textFooter.SetText(fmt.Sprintf("config: %s", msg))
+}
+
+func (tui *TUI) lintMenu() {
+	tui.editParam = "Lint"
+
+	// cmd := "ansible-lint"
+	// cmdArgs := []string{"images"}
+	// rc, outputSlice, err := cmd.RunBufferedCommand(containerCmd, containerCmdArgs, -1, true, "")
+
+	// if err != nil {
+	// 	output := strings.Join(*outputSlice, "\n") // convert slice of strings to string
+	// 	output = fmt.Sprintf("rc: %d, stdout: %s, error: %v", rc, output, err)
+	// 	slog.Error(output)
+	// 	tui.pages.SwitchToPage("main text")
+	// 	tui.textMain1.Clear()
+	// 	tui.textMain1.SetTitle("Error")
+	// 	tui.textMain1.SetText(output)
+	// 	tui.app.SetFocus(tui.listNav)
+	// 	tui.app.Sync()
+	// 	return
+	// }
+
+	tui.renderHeader()
+	tui.pages.SwitchToPage("main table")
+	tui.tableMain.Clear()
+	tui.tableMain.SetTitle("Lint Menu")
+	tui.tableMain.SetSelectable(true, false)
+
+	idx := 0
+	tui.tableMain.SetCell(
+		idx, 1,
+		&tview.TableCell{
+			Text:          "Lint entire repository",
+			Color:         tcell.ColorYellow,
+			NotSelectable: false,
+		},
+	)
+	idx++
+	tui.tableMain.SetCell(
+		idx, 1,
+		&tview.TableCell{
+			Text:          "Lint currently selected playbook",
+			Color:         tcell.ColorYellow,
+			NotSelectable: false,
+		},
+	)
+
+	tui.tableMain.ScrollToBeginning()
+	// tui.tableMain.InputHandler()
+	tui.app.SetFocus(tui.tableMain)
+	tui.app.Sync() // without this, listing images corrupts the screen
 }
 
 func (tui *TUI) listImages() {
@@ -200,51 +253,6 @@ func inspectFile(file string) *string {
 	return &s
 }
 
-func isInventory(file string) (bool, error) {
-	// Read file and check if it does NOT contains "become:"
-	// Checking inventory is more difficult to do efficiently.
-	// In this quick check, simple pattern match rules are used to score the file
-	// to determine if it should be displayed in the list.
-	// It really should run through ansible-inventory.
-	// To do this, the keyboard shortcuts can be used to inspect or verify the inventory file.
-
-	// read the whole file at once
-	b, err := os.ReadFile(file)
-	if err != nil {
-		return false, err
-	}
-	s := string(b) // convert bytes to string
-
-	found := false
-	score := 0
-	// check for typical inventory file patterns
-	if !strings.Contains(s, "become:") {
-		score++
-	}
-	if strings.Contains(s, "children:") {
-		score += 5
-	}
-	if score > 0 {
-		found = true
-	}
-
-	return found, nil
-}
-
-func isPlaybookFile(file string) (bool, error) {
-	// Read file and check if it contains "become:"
-
-	// read the whole file at once
-	b, err := os.ReadFile(file)
-	if err != nil {
-		return false, err
-	}
-	s := string(b) // convert bytes to string
-	// check whether s contains substring text
-	found := strings.Contains(s, "become:")
-	return found, nil
-}
-
 func (tui *TUI) listLimits() {
 	tui.editParam = "Limits"
 
@@ -306,6 +314,11 @@ func (tui *TUI) listLimits() {
 }
 
 func (tui *TUI) listPlaybooks() {
+	filter := true
+	// make filtering optional using variable set by keyboard event handler
+	if tui.editParam == "Playbooks-all" {
+		filter = false
+	}
 	tui.editParam = "Playbooks"
 
 	tui.renderHeader()
@@ -320,7 +333,9 @@ func (tui *TUI) listPlaybooks() {
 	fileExt := []string{"yaml", "yml"}
 
 	slog.Debug(fmt.Sprintf("Checking directory for playbook files with yaml extension: %s", tui.pbConfig.Tui.PlaybookDir))
-	if tui.pbConfig.Tui.PlaybookDir == "." {
+	if !filter {
+		yamlFiles, err = cmd.ListDir(tui.pbConfig.Tui.PlaybookDir, fileExt)
+	} else if tui.pbConfig.Tui.PlaybookDir == "." {
 		yamlFiles, err = cmd.ListDir(tui.pbConfig.Tui.PlaybookDir, fileExt)
 	} else {
 		yamlFiles, err = cmd.WalkDir(tui.pbConfig.Tui.PlaybookDir, fileExt)
@@ -333,9 +348,12 @@ func (tui *TUI) listPlaybooks() {
 
 	idx := 0
 	for _, line := range yamlFiles {
-		pbBool, err := isPlaybookFile(line)
-		if err != nil {
-			slog.Error(fmt.Sprintf("Could not check if file is playbook: %s, %s", line, err))
+		pbBool := true
+		if filter {
+			pbBool, err = cmd.IsPlaybookFile(line)
+			if err != nil {
+				slog.Error(fmt.Sprintf("Could not check if file is playbook: %s, %s", line, err))
+			}
 		}
 		if pbBool {
 			tui.tableMain.SetCell(
@@ -350,12 +368,30 @@ func (tui *TUI) listPlaybooks() {
 		}
 	}
 
-	tui.tableMain.ScrollToBeginning()
 	tui.app.SetFocus(tui.tableMain)
+	tui.tableMain.ScrollToBeginning()
+
+	if idx == 0 {
+		tui.tableMain.SetCell(
+			idx, 1,
+			&tview.TableCell{
+				Text:          "No playbook files found, set playbook-dir in config",
+				Color:         tcell.ColorYellow,
+				NotSelectable: false,
+			},
+		)
+		tui.app.SetFocus(tui.listNav)
+	}
+
 	tui.app.Sync() // without this, listing images corrupts the screen
 }
 
 func (tui *TUI) listInventoryFiles() {
+	filter := true
+	// make filtering optional using variable set by keyboard event handler
+	if tui.editParam == "Inventory-all" {
+		filter = false
+	}
 	tui.editParam = "Inventory"
 
 	tui.renderHeader()
@@ -369,8 +405,10 @@ func (tui *TUI) listInventoryFiles() {
 	var err error
 	fileExt := []string{"yaml", "yml", "ini", "txt", ""}
 
-	slog.Info(fmt.Sprintf("Checking directory for inventory files with yaml/yml, ini, txt extensions: %s", tui.pbConfig.Tui.InventoryDir))
-	if tui.pbConfig.Tui.InventoryDir == "." {
+	slog.Debug(fmt.Sprintf("Checking directory for inventory files with yaml/yml, ini, txt extensions: %s", tui.pbConfig.Tui.InventoryDir))
+	if !filter {
+		yamlFiles, err = cmd.ListDir(tui.pbConfig.Tui.InventoryDir, []string{})
+	} else if tui.pbConfig.Tui.InventoryDir == "." {
 		yamlFiles, err = cmd.ListDir(tui.pbConfig.Tui.InventoryDir, fileExt)
 	} else {
 		yamlFiles, err = cmd.WalkDir(tui.pbConfig.Tui.InventoryDir, fileExt)
@@ -383,7 +421,7 @@ func (tui *TUI) listInventoryFiles() {
 
 	idx := 0
 	for _, line := range yamlFiles {
-		pbBool, err := isInventory(line)
+		pbBool, err := cmd.IsInventory(line)
 		if err != nil {
 			slog.Error(fmt.Sprintf("Could not check if file is inventory: %s, %s", line, err))
 		}
@@ -399,9 +437,62 @@ func (tui *TUI) listInventoryFiles() {
 			idx++
 		}
 	}
-	tui.tableMain.ScrollToBeginning()
+
 	tui.app.SetFocus(tui.tableMain)
+	tui.tableMain.ScrollToBeginning()
+
+	if idx == 0 {
+		tui.tableMain.SetCell(
+			idx, 1,
+			&tview.TableCell{
+				Text:          "No inventory files found, set inventory-dir in config",
+				Color:         tcell.ColorYellow,
+				NotSelectable: false,
+			},
+		)
+		tui.app.SetFocus(tui.listNav)
+	}
+
 	tui.app.Sync() // without this, listing images corrupts the screen
+}
+
+func tuiExecuteLint(c *cmd.PlaybookConfig, target string) {
+
+	// Reset target based on string selected in TUI
+	if strings.Contains(target, "all") {
+		target = "."
+	} else {
+		target = c.Playbook
+	}
+
+	// Need to process and validate inputs for environment setup (Python virtualenv, container, etc.)
+
+	// process values in PlaybookConfig struct
+	err := c.ProcessEnvs()
+	if err != nil {
+		slog.Error(fmt.Sprintf("Exiting due to errors processing inputs: %s", err))
+		os.Exit(1)
+	}
+
+	// validate inputs in PlaybookConfig struct
+	err = c.ValidateInputs()
+	if err != nil {
+		slog.Error(fmt.Sprintf("Exiting due validation errors: %s", err))
+		os.Exit(1)
+	}
+
+	// Call lint method in cmd package, which will run ansible-lint in a container or python virtualenv
+	c.Metrics.ExitCode, err = c.RunAnsibleLint(target)
+	if err != nil {
+		slog.Error(fmt.Sprintf("Error running lint: %s", err))
+		os.Exit(1)
+	}
+
+	// Final exit code is based on the results of above RunAnsibleLint method call
+	if err != nil {
+		os.Exit(c.Metrics.ExitCode)
+	}
+	os.Exit(c.Metrics.ExitCode)
 }
 
 func tuiExecutePlaybook(c *cmd.PlaybookConfig) {

@@ -1,7 +1,0 @@
-{
-    "ssh-private-key-file": "~/.ssh/id_rsa",
-    "inventory": "./test/inventory-localhost.txt",
-    "playbook": "./test/playbook-simple.yml",
-    "verbose-level": 1,
-    "image": "ansible-tui:latest"
-}

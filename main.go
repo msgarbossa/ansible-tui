@@ -32,6 +32,8 @@ func main() {
 	displayVersion := flag.Bool("version", false, "Display version and exit")
 	generateTemplate := flag.Bool("g", false, "Generate ansible-tui.yml template and exit")
 	noTui := flag.Bool("nt", LookupEnvOrBool("NO_TUI", false), "No TUI.  Runs playbook from configuration file without TUI")
+	lintPlaybook := flag.Bool("lp", LookupEnvOrBool("LINT_PLAYBOOK", false), "Lint playbook.  Runs ansible-lint against playbook from configuration file without TUI")
+	lintAll := flag.Bool("la", LookupEnvOrBool("LINT_ALL", false), "Lint all.  Runs ansible-lint against all files without TUI")
 	flag.StringVar(&pbConfigFile, "c", LookupEnvOrString("PB_CONFIG_FILE", ""), "Playbook config file (PB_CONFIG_FILE)")
 	logLevel1 := flag.Bool("v", false, "Sets log level for ansible-tui to INFO (default WARN)")
 	logLevel2 := flag.Bool("vv", false, "Sets log level for ansible-tui to DEBUG (default WARN)")
@@ -44,7 +46,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	// set log level accoring to -v / -vv CLI options
+	// set log level according to -v / -vv CLI options
 	if *logLevel1 {
 		slog.SetLogLoggerLevel(slog.LevelInfo)
 	}
@@ -52,6 +54,7 @@ func main() {
 		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}
 
+	// create new/empty PlaybookConfig from struct
 	c := cmd.NewPlaybookConfig()
 
 	// handle config file path and temp directory path
@@ -63,6 +66,8 @@ func main() {
 	c.TempDirPath = defaultTempPath
 
 	var err error
+
+	// Set global configurations from pkg main's global variables
 
 	if *generateTemplate {
 		err = c.GenerateTemplateFile(defaultConfigFilePath)
@@ -84,6 +89,11 @@ func main() {
 				os.Exit(1)
 			}
 		}
+	}
+
+	// if running lint, don't use TUI
+	if *lintPlaybook || *lintAll {
+		*noTui = true
 	}
 
 	// read config file into PlaybookConfig struct
@@ -138,10 +148,24 @@ func main() {
 
 	// Using PlaybookConfig struct, determine runtime environment (ansible in path, in Python venv, or container).
 	// If container execution, write struct to file, run ansible-tui inside container to read and execute ansible.
-	c.Metrics.ExitCode, err = c.RunAnsiblePlaybook()
-	if err != nil {
-		slog.Error(fmt.Sprintf("Error running playbook: %s", err))
-		os.Exit(1)
+	if *lintAll {
+		c.Metrics.ExitCode, err = c.RunAnsibleLint(".")
+		if err != nil {
+			slog.Error(fmt.Sprintf("Error running ansible-lint (all): %s", err))
+			os.Exit(1)
+		}
+	} else if *lintPlaybook {
+		c.Metrics.ExitCode, err = c.RunAnsibleLint(c.Playbook)
+		if err != nil {
+			slog.Error(fmt.Sprintf("Error running ansible-lint (playbook): %s", err))
+			os.Exit(1)
+		}
+	} else {
+		c.Metrics.ExitCode, err = c.RunAnsiblePlaybook()
+		if err != nil {
+			slog.Error(fmt.Sprintf("Error running playbook: %s", err))
+			os.Exit(1)
+		}
 	}
 
 	// Final exit code is based on the results of above RunAnsiblePlaybook method call

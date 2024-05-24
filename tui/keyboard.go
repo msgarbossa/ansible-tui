@@ -18,6 +18,19 @@ func (tui *TUI) setupKeyboard() {
 			} else {
 				return event
 			}
+		case 'a':
+			if tui.editParam == "Inventory" {
+				tui.editParam = "Inventory-all"
+				tui.listInventoryFiles()
+			} else if tui.editParam == "Playbook" {
+				tui.editParam = "Playbook-all"
+				tui.listPlaybooks()
+			} else if tui.editParam == "Images" {
+				tui.editParam = "Images-all"
+				tui.listImages()
+			} else {
+				return event
+			}
 		}
 		switch event.Key() {
 		case tcell.KeyEscape:
