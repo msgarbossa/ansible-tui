@@ -388,40 +388,6 @@ func (c *PlaybookConfig) ValidateInputs() error {
 		}
 	}
 
-	slog.Info(fmt.Sprintf("Checking inventory file path: %s", c.InventoryFile))
-	err = sanitizePath(c.InventoryFile)
-	if err != nil {
-		slog.Error(fmt.Sprintf("Error sanitizing inventory file path: %s", c.InventoryFile))
-		return err
-	}
-	if ok := checkRelativePath(c.InventoryFile); !ok {
-		return &InputError{
-			Err: errors.New("inventory-file must have relative path to current directory"),
-		}
-	}
-	if ok, err := pathExists(c.InventoryFile, false); !ok {
-		slog.Error(fmt.Sprintf("Inventory path file does not exist: %s", c.InventoryFile))
-		return err
-	}
-
-	if c.ExtraVarsFile != "" {
-		slog.Info(fmt.Sprintf("Checking extra-vars file path: %s", c.ExtraVarsFile))
-		err := sanitizePath(c.ExtraVarsFile)
-		if err != nil {
-			slog.Error(fmt.Sprintf("sanitizing extra-vars path: %s", c.ExtraVarsFile))
-			return err
-		}
-		if ok := checkRelativePath(c.ExtraVarsFile); !ok {
-			return &InputError{
-				Err: errors.New("extra-vars file must have relative path to current directory"),
-			}
-		}
-		if ok, err := pathExists(c.ExtraVarsFile, false); !ok {
-			slog.Error(fmt.Sprintf("Path for extra-vars file does not exist: %s", c.ExtraVarsFile))
-			return err
-		}
-	}
-
 	execTypeCount := 0
 	if c.VirtualEnvPath != "" {
 		slog.Info(fmt.Sprintf("Python virtual environment path: %s", c.VirtualEnvPath))
@@ -469,6 +435,45 @@ func (c *PlaybookConfig) ValidateInputs() error {
 			return err
 		}
 		execTypeCount++
+	}
+
+	// Skip the rest (SSH and inventory) when running ansible-lint (local)
+	if c.LintEnabled {
+		return nil
+	}
+
+	slog.Info(fmt.Sprintf("Checking inventory file path: %s", c.InventoryFile))
+	err = sanitizePath(c.InventoryFile)
+	if err != nil {
+		slog.Error(fmt.Sprintf("Error sanitizing inventory file path: %s", c.InventoryFile))
+		return err
+	}
+	if ok := checkRelativePath(c.InventoryFile); !ok {
+		return &InputError{
+			Err: errors.New("inventory-file must have relative path to current directory"),
+		}
+	}
+	if ok, err := pathExists(c.InventoryFile, false); !ok {
+		slog.Error(fmt.Sprintf("Inventory path file does not exist: %s", c.InventoryFile))
+		return err
+	}
+
+	if c.ExtraVarsFile != "" {
+		slog.Info(fmt.Sprintf("Checking extra-vars file path: %s", c.ExtraVarsFile))
+		err := sanitizePath(c.ExtraVarsFile)
+		if err != nil {
+			slog.Error(fmt.Sprintf("sanitizing extra-vars path: %s", c.ExtraVarsFile))
+			return err
+		}
+		if ok := checkRelativePath(c.ExtraVarsFile); !ok {
+			return &InputError{
+				Err: errors.New("extra-vars file must have relative path to current directory"),
+			}
+		}
+		if ok, err := pathExists(c.ExtraVarsFile, false); !ok {
+			slog.Error(fmt.Sprintf("Path for extra-vars file does not exist: %s", c.ExtraVarsFile))
+			return err
+		}
 	}
 
 	if c.SshPrivateKeyFile != "" {

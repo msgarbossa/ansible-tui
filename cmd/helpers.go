@@ -396,17 +396,20 @@ func executeCommandInContainer(c PlaybookConfig, command string, cmdArgs []strin
 	var containerArgs []string
 	containerArgs = append(containerArgs, "run", "--rm", "-u", "root", "-e", containerConfigEnvVar, "-e", "NO_TUI=true", "-v", volMount1)
 
-	if c.SshPrivateKeyFile != "" {
-		c.SshPrivateKeyFile, err = filepath.EvalSymlinks(c.SshPrivateKeyFile)
-		if err != nil {
-			return 1, &outputLines, err
-		}
-		// set volume mount to normalized location in container and append to command
-		volMount2 := c.SshPrivateKeyFile + ":" + "/app/.ssh/ansible-tui:ro" // using mount option -z/-Z causes lsetxattr error
-		containerArgs = append(containerArgs, "-v", volMount2)
+	// Setup SSH if lint is not enabled
+	if !c.LintEnabled {
+		if c.SshPrivateKeyFile != "" {
+			c.SshPrivateKeyFile, err = filepath.EvalSymlinks(c.SshPrivateKeyFile)
+			if err != nil {
+				return 1, &outputLines, err
+			}
+			// set volume mount to normalized location in container and append to command
+			volMount2 := c.SshPrivateKeyFile + ":" + "/app/.ssh/ansible-tui:ro" // using mount option -z/-Z causes lsetxattr error
+			containerArgs = append(containerArgs, "-v", volMount2)
 
-		// modify SSH private key path to location used inside the container
-		c.SshPrivateKeyFile = "/app/.ssh/ansible-tui"
+			// modify SSH private key path to location used inside the container
+			c.SshPrivateKeyFile = "/app/.ssh/ansible-tui"
+		}
 	}
 
 	containerArgs = append(containerArgs, c.Image, command)
