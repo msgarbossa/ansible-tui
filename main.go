@@ -94,6 +94,7 @@ func main() {
 	// if running lint, don't use TUI
 	if *lintPlaybook || *lintAll {
 		*noTui = true
+		c.LintEnabled = true
 	}
 
 	// read config file into PlaybookConfig struct

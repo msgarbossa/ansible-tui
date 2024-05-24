@@ -52,6 +52,7 @@ type PlaybookConfig struct {
 	TempDirPath          string `yaml:"temp-dir-path" json:"temp-dir-path"`
 	ConfigFilePath       string
 	Tui                  TuiParams `yaml:"tui" json:"tui"`
+	LintEnabled          bool
 }
 
 type InputError struct {
@@ -100,16 +101,6 @@ func (c *PlaybookConfig) ReadEnvs() error {
 		// TODO: should probably evaluate this right away in a separate function and set log level
 	}
 
-	sshPrivateKeyFile := os.Getenv("SSH_PRIVATE_KEY_FILE")
-	if sshPrivateKeyFile != "" {
-		c.SshPrivateKeyFile = sshPrivateKeyFile
-	}
-
-	remoteUser := os.Getenv("ANSIBLE_REMOTE_USER")
-	if remoteUser != "" {
-		c.RemoteUser = remoteUser
-	}
-
 	tmpDirPath := os.Getenv("TMP_DIR_PATH")
 	if tmpDirPath != "" {
 		c.TempDirPath = tmpDirPath
@@ -128,6 +119,31 @@ func (c *PlaybookConfig) ReadEnvs() error {
 			slog.Error(fmt.Sprintf("Error creating temp-dir path: %s", p))
 			return err
 		}
+	}
+
+	virtualEnvPath := os.Getenv("VIRTUAL_ENV")
+	if virtualEnvPath != "" {
+		c.VirtualEnvPath = virtualEnvPath
+	}
+
+	containerImage := os.Getenv("CONTAINER_IMAGE")
+	if containerImage != "" {
+		c.Image = containerImage
+	}
+
+	// Skip the rest (SSH and inventory) when running ansible-lint (local)
+	if c.LintEnabled {
+		return nil
+	}
+
+	sshPrivateKeyFile := os.Getenv("SSH_PRIVATE_KEY_FILE")
+	if sshPrivateKeyFile != "" {
+		c.SshPrivateKeyFile = sshPrivateKeyFile
+	}
+
+	remoteUser := os.Getenv("ANSIBLE_REMOTE_USER")
+	if remoteUser != "" {
+		c.RemoteUser = remoteUser
 	}
 
 	inventoryFile := os.Getenv("INVENTORY_FILE")
@@ -226,16 +242,6 @@ func (c *PlaybookConfig) ReadEnvs() error {
 	windowsGroups := os.Getenv("WINDOWS_GROUP")
 	if windowsGroups != "" {
 		c.WindowsGroup = windowsGroups
-	}
-
-	virtualEnvPath := os.Getenv("VIRTUAL_ENV")
-	if virtualEnvPath != "" {
-		c.VirtualEnvPath = virtualEnvPath
-	}
-
-	containerImage := os.Getenv("CONTAINER_IMAGE")
-	if containerImage != "" {
-		c.Image = containerImage
 	}
 
 	return nil
