@@ -43,7 +43,6 @@ type PlaybookConfig struct {
 	AnsibleSkipTags      string                       `yaml:"skip-tags" json:"skip-tags"`
 	ExtraArgs            string                       `yaml:"extra-args" json:"extra-args"`
 	WindowsGroup         string                       `yaml:"windows-group" json:"windows-group"`
-	ExecutionType        string                       `yaml:"execution-type" json:"execution-type"`
 	Image                string                       `yaml:"image" json:"image"`
 	VirtualEnvPath       string                       `yaml:"virtual-env-path" json:"virtual-env-path"`
 	PlaybookTimeout      int                          `yaml:"playbook-timeout" json:"playbook-timeout"`
@@ -129,11 +128,6 @@ func (c *PlaybookConfig) ReadEnvs() error {
 	containerImage := os.Getenv("CONTAINER_IMAGE")
 	if containerImage != "" {
 		c.Image = containerImage
-	}
-
-	// Skip the rest (SSH and inventory) when running ansible-lint (local)
-	if c.LintEnabled {
-		return nil
 	}
 
 	sshPrivateKeyFile := os.Getenv("SSH_PRIVATE_KEY_FILE")
@@ -439,6 +433,7 @@ func (c *PlaybookConfig) ValidateInputs() error {
 
 	// Skip the rest (SSH and inventory) when running ansible-lint (local)
 	if c.LintEnabled {
+		slog.Info("Skipping rest of ValidateInputs for ansible-lint")
 		return nil
 	}
 

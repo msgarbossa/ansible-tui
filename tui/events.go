@@ -278,7 +278,7 @@ func (tui *TUI) listLimits() {
 	if err == nil {
 		err = tui.pbConfig.ValidateInputs()
 		if err != nil {
-			errStr := fmt.Sprintf("Input validation: %s", err)
+			errStr := fmt.Sprintf("Input validation listing limits: %s", err)
 			slog.Error(errStr)
 			limitList = append(limitList, errStr)
 			tui.tableMain.SetSelectable(false, false)
@@ -464,6 +464,8 @@ func tuiExecuteLint(c *cmd.PlaybookConfig, target string) {
 	} else {
 		target = c.Playbook
 	}
+
+	c.LintEnabled = true // this prevents SSH from being used
 
 	// Need to process and validate inputs for environment setup (Python virtualenv, container, etc.)
 

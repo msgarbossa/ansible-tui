@@ -62,7 +62,6 @@ type writeConfig struct {
 	AnsibleSkipTags      string                       `yaml:"skip-tags" json:"skip-tags"`
 	ExtraArgs            string                       `yaml:"extra-args" json:"extra-args"`
 	WindowsGroup         string                       `yaml:"windows-group" json:"windows-group"`
-	ExecutionType        string                       `yaml:"execution-type" json:"execution-type"`
 	VirtualEnvPath       string                       `yaml:"virtual-env-path" json:"virtual-env-path"`
 	PlaybookTimeout      int                          `yaml:"playbook-timeout" json:"playbook-timeout"`
 	EnvironmentVariables playbookEnvironmentVariables `yaml:"environment-variables"`
@@ -84,7 +83,6 @@ func (tui *TUI) toWriteConfig() writeConfig {
 		AnsibleSkipTags:      tui.pbConfig.AnsibleSkipTags,
 		ExtraArgs:            tui.pbConfig.ExtraArgs,
 		WindowsGroup:         tui.pbConfig.WindowsGroup,
-		ExecutionType:        tui.pbConfig.ExecutionType,
 		VirtualEnvPath:       tui.pbConfig.VirtualEnvPath,
 		PlaybookTimeout:      tui.pbConfig.PlaybookTimeout,
 		EnvironmentVariables: playbookEnvironmentVariables(tui.pbConfig.EnvironmentVariables),
