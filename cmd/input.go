@@ -130,6 +130,18 @@ func (c *PlaybookConfig) ReadEnvs() error {
 		c.Image = containerImage
 	}
 
+	// sshPrivateKeyContents := os.Getenv("SSH_PRIVATE_KEY_CONTENTS")
+	// if sshPrivateKeyContents != "" {
+	// 	c.SshPrivateKeyFile = "./ssh-private-key"
+	// 	// write out contents to file
+	// 	err := WriteFileFromString(c.SshPrivateKeyFile, sshPrivateKeyContents, 0600)
+	// 	if err != nil {
+	// 		slog.Error("could not write ssh private key file from ssh private key contents")
+	// 		return err
+	// 	}
+	// 	slog.Debug(fmt.Sprintf("Wrote SSH private key file from SSH_PRIVATE_KEY_CONTENTS to %s", c.SshPrivateKeyFile))
+	// }
+
 	sshPrivateKeyFile := os.Getenv("SSH_PRIVATE_KEY_FILE")
 	if sshPrivateKeyFile != "" {
 		c.SshPrivateKeyFile = sshPrivateKeyFile
@@ -153,7 +165,7 @@ func (c *PlaybookConfig) ReadEnvs() error {
 	if inventoryContents != "" {
 		c.InventoryFile = "./hosts-INVENTORY"
 		// write out contents to file
-		err := WriteFileFromString(c.InventoryFile, inventoryContents)
+		err := WriteFileFromString(c.InventoryFile, inventoryContents, 0600)
 		if err != nil {
 			slog.Error("could not write inventory file from inventory contents")
 			return err
@@ -195,7 +207,7 @@ func (c *PlaybookConfig) ReadEnvs() error {
 	if extraVarsContents != "" {
 		c.ExtraVarsFile = "PLAYBOOK-extravars"
 		// write out contents to file
-		err := WriteFileFromString(c.ExtraVarsFile, extraVarsContents)
+		err := WriteFileFromString(c.ExtraVarsFile, extraVarsContents, 0600)
 		if err != nil {
 			slog.Error("could not write extra-vars file from extra-vars contents")
 			return err
@@ -354,34 +366,6 @@ func (c *PlaybookConfig) ValidateInputs() error {
 		absPath string
 	)
 
-	if c.Playbook == "" {
-		return &InputError{
-			Err: errors.New("playbook is required"),
-		}
-	}
-
-	slog.Info(fmt.Sprintf("Checking playbook path: %s", c.Playbook))
-	err = sanitizePath(c.Playbook)
-	if err != nil {
-		slog.Error(fmt.Sprintf("sanitizing playbook path: %s", c.Playbook))
-		return err
-	}
-	if ok := checkRelativePath(c.Playbook); !ok {
-		return &InputError{
-			Err: errors.New("playbook must have relative path to current directory"),
-		}
-	}
-	if ok, err := pathExists(c.Playbook, false); !ok {
-		slog.Error(fmt.Sprintf("Path for playbook does not exist: %s", c.Playbook))
-		return err
-	}
-
-	if c.InventoryFile == "" {
-		return &InputError{
-			Err: errors.New("inventory parameter is required"),
-		}
-	}
-
 	execTypeCount := 0
 	if c.VirtualEnvPath != "" {
 		slog.Info(fmt.Sprintf("Python virtual environment path: %s", c.VirtualEnvPath))
@@ -432,9 +416,43 @@ func (c *PlaybookConfig) ValidateInputs() error {
 	}
 
 	// Skip the rest (SSH and inventory) when running ansible-lint (local)
-	if c.LintEnabled {
-		slog.Info("Skipping rest of ValidateInputs for ansible-lint")
+	if c.LintEnabled && c.Playbook == "" {
+		slog.Info("Skipping rest of ValidateInputs for ansible-lint of entire repository")
 		return nil
+	}
+
+	if c.Playbook == "" {
+		return &InputError{
+			Err: errors.New("playbook is required"),
+		}
+	}
+
+	slog.Info(fmt.Sprintf("Checking playbook path: %s", c.Playbook))
+	err = sanitizePath(c.Playbook)
+	if err != nil {
+		slog.Error(fmt.Sprintf("sanitizing playbook path: %s", c.Playbook))
+		return err
+	}
+	if ok := checkRelativePath(c.Playbook); !ok {
+		return &InputError{
+			Err: errors.New("playbook must have relative path to current directory"),
+		}
+	}
+	if ok, err := pathExists(c.Playbook, false); !ok {
+		slog.Error(fmt.Sprintf("Path for playbook does not exist: %s", c.Playbook))
+		return err
+	}
+
+	// Skip the rest (SSH and inventory) when running ansible-lint (local)
+	if c.LintEnabled {
+		slog.Info("Skipping rest of ValidateInputs for ansible-lint of playbook")
+		return nil
+	}
+
+	if c.InventoryFile == "" {
+		return &InputError{
+			Err: errors.New("inventory parameter is required"),
+		}
 	}
 
 	slog.Info(fmt.Sprintf("Checking inventory file path: %s", c.InventoryFile))

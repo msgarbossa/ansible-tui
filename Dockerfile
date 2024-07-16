@@ -19,7 +19,7 @@ RUN apt-get update && apt-get upgrade -y && \
 
 ENV LANG en_US.UTF-8
 
-RUN pip3 install --no-cache-dir ansible ansible-lint
+RUN pip3 install --no-cache-dir ansible ansible-lint jmespath
 # Add these python packages to above command for OpenTelemetry tracing for Ansible playbooks:
 # opentelemetry-api opentelemetry-exporter-otlp opentelemetry-sdk
 

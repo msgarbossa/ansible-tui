@@ -78,9 +78,9 @@ func main() {
 		os.Exit(0)
 	}
 
-	// if no config file was passed, set force TUI (default config file will be used)
-	if pbConfigFile == "" {
-		*noTui = false
+	// if no config file was passed and TUI isn't disabled, generate a default config file
+	if pbConfigFile == "" && !*noTui {
+		// *noTui = false
 		pbConfigFile = defaultConfigFilePath
 		if _, err := os.Stat(pbConfigFile); os.IsNotExist(err) {
 			err = c.GenerateTemplateFile(defaultConfigFilePath)

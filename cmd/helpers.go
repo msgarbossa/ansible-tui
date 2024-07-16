@@ -185,11 +185,18 @@ func ensureDir(dirName string) error {
 	return err
 }
 
-func WriteFileFromString(outputFilePath string, contents string) error {
+func WriteFileFromString(outputFilePath string, contents string, mode fs.FileMode) error {
 	b := []byte(contents) // convert input string (contents) to byte value
 	err := os.WriteFile(outputFilePath, b, 0600)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Error writing output file: %s", outputFilePath))
+		return err
+	}
+
+	// set mode on file
+	err = os.Chmod(outputFilePath, mode)
+	if err != nil {
+		slog.Error(fmt.Sprintf("Error setting mode on output file: %s", outputFilePath))
 		return err
 	}
 

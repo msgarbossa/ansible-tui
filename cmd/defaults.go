@@ -204,7 +204,7 @@ tui:
   virtual-envs-dir: ""
 `
 
-	WriteFileFromString(defaultConfigFilePath, contents)
+	WriteFileFromString(defaultConfigFilePath, contents, 0640)
 
 	return nil
 }
