@@ -1,0 +1,12 @@
+ansible-core==2.16.9
+pywinrm
+pywinrm[credssp]
+ansible-lint
+opentelemetry-api
+opentelemetry-exporter-otlp
+opentelemetry-sdk
+requests
+jmespath
+pytest
+pytest-testinfra
+flake8
